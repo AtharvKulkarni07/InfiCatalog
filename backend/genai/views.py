@@ -53,6 +53,12 @@ class NaturalLanguageSearchView(APIView):
         s.is_valid(raise_exception=True)
         categories = list(Product.objects.values_list("category", flat=True).distinct())
         brands = list(Product.objects.values_list("brand", flat=True).distinct())
-        result = services.parse_search_query(s.validated_data["query"], categories, brands)
+        all_tags = set()
+        for t_list in Product.objects.values_list("tags", flat=True):
+            if isinstance(t_list, list):
+                all_tags.update(t_list)
+        result = services.parse_search_query(
+            s.validated_data["query"], categories, brands, sorted(list(all_tags))
+        )
         logger.info("AI search %r -> %s (%s)", s.validated_data["query"], result["filters"], result["source"])
         return Response(result)

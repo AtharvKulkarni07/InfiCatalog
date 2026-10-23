@@ -12,7 +12,7 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-SEARCH_KEYS = {"search", "category", "brand", "min_price", "max_price", "ordering"}
+SEARCH_KEYS = {"search", "category", "brand", "min_price", "max_price", "ordering", "tags", "exclude"}
 ALLOWED_ORDERING = {"price", "-price", "name", "-name", "-created_at", "created_at"}
 
 
@@ -90,7 +90,7 @@ def suggest_tags(name: str, brand: str, category: str, description: str = "") ->
 
 # --------------------------------------------------------------------------- natural-language search
 def _sanitize_filters(raw: dict, categories: list[str], brands: list[str]) -> dict:
-    """Never trust model output: whitelist keys, coerce types, and match values to real catalog values."""
+    """Whitelist keys, coerce types, and match values to real catalog values."""
     out = {}
     lookup = {"category": {c.lower(): c for c in categories}, "brand": {b.lower(): b for b in brands}}
     for field in ("category", "brand"):
@@ -106,6 +106,29 @@ def _sanitize_filters(raw: dict, categories: list[str], brands: list[str]) -> di
             pass
     if "min_price" in out and "max_price" in out and out["min_price"] > out["max_price"]:
         out["min_price"], out["max_price"] = out["max_price"], out["min_price"]
+
+    # Tags: list or comma-separated string
+    raw_tags = raw.get("tags")
+    if isinstance(raw_tags, list):
+        clean_tags = [str(t).strip().lower() for t in raw_tags if str(t).strip()]
+        if clean_tags:
+            out["tags"] = ",".join(clean_tags[:6])
+    elif isinstance(raw_tags, str) and raw_tags.strip():
+        clean_tags = [t.strip().lower() for t in raw_tags.split(",") if t.strip()]
+        if clean_tags:
+            out["tags"] = ",".join(clean_tags[:6])
+
+    # Exclude: list or comma-separated string
+    raw_ex = raw.get("exclude")
+    if isinstance(raw_ex, list):
+        clean_ex = [str(e).strip().lower() for e in raw_ex if str(e).strip()]
+        if clean_ex:
+            out["exclude"] = ",".join(clean_ex[:5])
+    elif isinstance(raw_ex, str) and raw_ex.strip():
+        clean_ex = [e.strip().lower() for e in raw_ex.split(",") if e.strip()]
+        if clean_ex:
+            out["exclude"] = ",".join(clean_ex[:5])
+
     search = " ".join(str(raw.get("search") or "").split())[:100]
     if search:
         out["search"] = search
@@ -114,54 +137,161 @@ def _sanitize_filters(raw: dict, categories: list[str], brands: list[str]) -> di
     return out
 
 
-def _rule_based_filters(query: str, categories: list[str], brands: list[str]) -> dict:
+def _rule_based_filters(query: str, categories: list[str], brands: list[str]) -> tuple[dict, str]:
     q = query.lower()
     raw = {}
+    reasoning_parts = []
+
+    # Category matching with synonym support
+    cat_synonyms = {
+        "Beverages": ["drink", "drinks", "beverage", "beverages", "tea", "coffee", "juice", "soda", "latte", "water"],
+        "Groceries": ["snack", "snacks", "food", "grocery", "groceries", "oats", "chips", "nuts", "biscuit", "cookies"],
+        "Home Care": ["clean", "cleaner", "cleaning", "detergent", "utensil", "utensils", "dishes", "dish", "soap bar", "toilet", "floor"],
+        "Personal Care": ["shampoo", "skincare", "skin", "hair", "scalp", "dandruff", "lotion", "face wash", "body wash", "toothpaste"],
+        "Electronics": ["headphone", "headphones", "earbuds", "earbud", "audio", "mouse", "keyboard", "cable", "charger", "gadget"],
+    }
+
+    matched_cat = None
     for c in categories:
         if c.lower() in q:
-            raw["category"] = c
+            matched_cat = c
             q = q.replace(c.lower(), " ")
+            break
+
+    if not matched_cat:
+        for c, syns in cat_synonyms.items():
+            if any(syn in q for syn in syns):
+                for actual_c in categories:
+                    if actual_c.lower() == c.lower():
+                        matched_cat = actual_c
+                        break
+                if matched_cat:
+                    break
+
+    if matched_cat:
+        raw["category"] = matched_cat
+        reasoning_parts.append(f"in {matched_cat}")
+
+    # Brand matching
     for b in brands:
         if b.lower() in q:
             raw["brand"] = b
             q = q.replace(b.lower(), " ")
+            reasoning_parts.append(f"from {b}")
+            break
+
+    # Negation / Exclusion extraction
+    exclude_terms = []
+    if m := re.search(r"(?:without|no|zero|free from|non)\s+([a-z]+)", q):
+        ex_word = m.group(1).strip()
+        if ex_word in ("sugar", "caffeine", "dairy", "chocolate", "alcohol", "oil"):
+            exclude_terms.append(ex_word)
+            q = q.replace(m.group(0), " ")
+    if "sugar-free" in q or "sugar free" in q:
+        exclude_terms.append("sugar")
+        q = q.replace("sugar-free", " ").replace("sugar free", " ")
+    if exclude_terms:
+        raw["exclude"] = exclude_terms
+        reasoning_parts.append(f"excluding {', '.join(exclude_terms)}")
+
+    # Price parsing
     num = r"(?:rs\.?|inr|₹)?\s*(\d[\d,]*(?:\.\d+)?)"
     if m := re.search(rf"(?:under|below|less than|cheaper than|max|upto|up to)\s*{num}", q):
-        raw["max_price"] = float(m.group(1).replace(",", ""))
+        val = float(m.group(1).replace(",", ""))
+        raw["max_price"] = val
         q = q.replace(m.group(0), " ")
+        reasoning_parts.append(f"under ₹{int(val)}")
     if m := re.search(rf"(?:over|above|more than|at least|min)\s*{num}", q):
-        raw["min_price"] = float(m.group(1).replace(",", ""))
+        val = float(m.group(1).replace(",", ""))
+        raw["min_price"] = val
         q = q.replace(m.group(0), " ")
+        reasoning_parts.append(f"above ₹{int(val)}")
+
+    # Ordering
     if re.search(r"\b(cheapest|cheap|affordable|budget)\b", q):
         raw["ordering"] = "price"
+        reasoning_parts.append("sorted by lowest price")
     elif re.search(r"\b(expensive|premium|priciest)\b", q):
         raw["ordering"] = "-price"
-    stop = {"show", "me", "find", "get", "i", "want", "a", "an", "the", "some", "for", "with", "and", "in",
-            "cheapest", "cheap", "affordable", "budget", "expensive", "premium", "priciest", "products", "product"}
+        reasoning_parts.append("sorted by premium price")
+
+    # Intent-to-Tag mapping
+    tags = []
+    if any(w in q for w in ("workout", "energy", "gym", "fitness", "tired", "boost")):
+        tags.extend(["energy", "caffeine"])
+    if any(w in q for w in ("dandruff", "scalp", "itchy")):
+        tags.extend(["dandruff", "scalp"])
+        raw.setdefault("search", "shampoo")
+    if any(w in q for w in ("utensil", "utensils", "greasy", "oily", "dishes")):
+        tags.extend(["dish soap", "cleaner"])
+    if any(w in q for w in ("crunchy", "crispy", "movie")):
+        tags.extend(["snack", "crunchy"])
+    if any(w in q for w in ("eco", "green", "biodegradable")):
+        tags.extend(["eco", "biodegradable"])
+    if tags:
+        raw["tags"] = tags
+
+    # Stopwords cleanup for remaining search keywords
+    stop = {
+        "show", "me", "find", "get", "i", "want", "a", "an", "the", "some", "for", "with", "and", "in",
+        "of", "to", "or", "something", "looking", "need", "best", "good", "cheapest", "cheap", "affordable",
+        "budget", "expensive", "premium", "priciest", "products", "product", "items", "item"
+    }
     words = [w for w in re.findall(r"[a-z0-9]+", q) if w not in stop and not w.isdigit()]
-    raw["search"] = " ".join(words)
-    return raw
+    if words and not raw.get("search"):
+        raw["search"] = " ".join(words[:4])
+
+    reasoning = "Searching for " + (" ".join(reasoning_parts) if reasoning_parts else f'items matching "{query}"')
+    return raw, reasoning
 
 
-def parse_search_query(query: str, categories: list[str], brands: list[str]) -> dict:
-    """Turn 'cheap protein snacks under 500' into structured catalog filters."""
+def parse_search_query(
+    query: str, categories: list[str], brands: list[str], available_tags: list[str] | None = None
+) -> dict:
+    """Turn conversational, problem-oriented queries into high-precision catalog filters."""
+    tags_context = (available_tags or [])[:40]
+
     system = (
-        "You convert a shopper's natural-language request into catalog filters. Prices are in INR. "
-        "Use ONLY categories and brands from the provided lists, otherwise leave them null. "
-        "Put leftover product keywords in `search`. Use `ordering` only if the user implies sorting."
+        "You are an expert e-commerce search intelligence system for a retail product catalog. "
+        "Your task is to translate natural-language shopper requests (problems, lifestyle needs, or queries) "
+        "into structured catalog filters.\n\n"
+        f"CATALOG TAXONOMY:\n"
+        f"- Categories: {json.dumps(categories)}\n"
+        f"- Brands: {json.dumps(brands)}\n"
+        f"- Known Tags: {json.dumps(tags_context)}\n\n"
+        "RULES FOR EXTRACTION:\n"
+        "1. category: Pick the single best category strictly from the list if the problem or item falls under it; otherwise null.\n"
+        "2. brand: Pick from the brand list ONLY if explicitly mentioned or strongly implied; otherwise null.\n"
+        "3. search: 1 to 3 clean, canonical product keywords (e.g. 'dish soap', 'energy drink', 'shampoo'). "
+        "NEVER include conversational filler ('something for', 'products'). Leave null if category and tags cover it.\n"
+        "4. tags: Array of 1 to 3 relevant tags matching catalog tags or concepts (e.g. ['energy', 'caffeine']).\n"
+        "5. exclude: Array of excluded ingredients/terms if user expressed negation (e.g. 'without sugar' -> ['sugar']).\n"
+        "6. min_price, max_price: Numbers in INR if mentioned.\n"
+        "7. ordering: 'price' for cheapest/budget, '-price' for expensive/premium, 'name', or null.\n"
+        "8. reasoning: A concise, friendly 1-sentence explanation of what you searched for.\n\n"
+        "Return ONLY JSON: {\"category\": str|null, \"brand\": str|null, \"search\": str|null, "
+        "\"tags\": list[str]|null, \"exclude\": list[str]|null, \"min_price\": num|null, "
+        "\"max_price\": num|null, \"ordering\": str|null, \"reasoning\": str}"
     )
-    prompt = (
-        f"Categories: {json.dumps(categories)}\nBrands: {json.dumps(brands)}\n"
-        f"Request: {query!r}\n"
-        'Return ONLY JSON: {"search": string|null, "category": string|null, "brand": string|null, '
-        '"min_price": number|null, "max_price": number|null, '
-        '"ordering": "price"|"-price"|"name"|"-created_at"|null}'
-    )
+
+    prompt = f"Shopper Request: {query!r}"
+
     try:
-        parsed = _parse_json(_call_gemini(prompt, system=system, json_mode=True, temperature=0.0))
+        raw_text = _call_gemini(prompt, system=system, json_mode=True, temperature=0.0)
+        parsed = _parse_json(raw_text)
         if isinstance(parsed, dict):
-            return {"filters": _sanitize_filters(parsed, categories, brands), "source": "llm"}
-    except (LLMError, ValueError, TypeError):
-        pass
-    return {"filters": _sanitize_filters(_rule_based_filters(query, categories, brands), categories, brands),
-            "source": "fallback"}
+            filters = _sanitize_filters(parsed, categories, brands)
+            reasoning = str(parsed.get("reasoning") or "").strip()
+            if not reasoning:
+                parts = [f"{k}: {v}" for k, v in filters.items()]
+                reasoning = f"Understood as {', '.join(parts)}" if parts else "Showing all matching catalog products."
+            return {"filters": filters, "reasoning": reasoning, "source": "llm"}
+    except (LLMError, ValueError, TypeError) as e:
+        logger.warning("LLM search failed (%s), using rule-based fallback", e)
+
+    fallback_raw, fallback_reasoning = _rule_based_filters(query, categories, brands)
+    return {
+        "filters": _sanitize_filters(fallback_raw, categories, brands),
+        "reasoning": fallback_reasoning,
+        "source": "fallback",
+    }

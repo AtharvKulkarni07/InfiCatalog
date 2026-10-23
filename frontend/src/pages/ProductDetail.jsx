@@ -32,7 +32,7 @@ export default function ProductDetail() {
     try {
       await api.delete(`/products/${id}/`);
       toast("Product deleted");
-      navigate("/", { replace: true });
+      navigate("/products", { replace: true });
     } catch (e) {
       toast(parseError(e).message, "error");
       setDeleting(false);
@@ -46,7 +46,7 @@ export default function ProductDetail() {
       <div className="state">
         <h2>Product not found</h2>
         <p>It may have been deleted by its owner.</p>
-        <Link className="btn btn-primary" to="/">Back to catalog</Link>
+        <Link className="btn btn-primary" to="/products">Back to catalog</Link>
       </div>
     );
   }
@@ -55,7 +55,7 @@ export default function ProductDetail() {
   const p = state.product;
   return (
     <article className="detail">
-      <Link to="/" className="back">Back to catalog</Link>
+      <Link to="/products" className="back">Back to catalog</Link>
       <div className="detail-grid">
         <div className="detail-img"><ProductImage src={p.image_url} alt={p.name} /></div>
         <div>
@@ -67,7 +67,7 @@ export default function ProductDetail() {
           <p className="small">Added by {p.owner_username || "a former user"} on {new Date(p.created_at).toLocaleDateString("en-IN", { dateStyle: "medium" })}</p>
           {p.is_owner && (
             <div className="row">
-              <Link className="btn btn-primary" to={`/products/${p.id}/edit`}>Edit product</Link>
+              <Link className="btn btn-yellow" to={`/products/${p.id}/edit`}>Edit product <span className="arrow">↗</span></Link>
               <button className="btn btn-danger-outline" onClick={() => setConfirming(true)}>Delete</button>
             </div>
           )}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, firstError, parseError } from "../api.js";
 import { Sparkle } from "../components/Icons.jsx";
@@ -23,6 +23,16 @@ export default function ProductForm() {
   const [saving, setSaving] = useState(false);
   const [ai, setAi] = useState({ desc: false, tags: false, note: "" });
   const [facets, setFacets] = useState({ categories: [], brands: [] });
+
+  const sortedCategories = useMemo(() => {
+    const set = new Set((facets.categories || []).map((c) => c?.trim()).filter(Boolean));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [facets.categories]);
+
+  const sortedBrands = useMemo(() => {
+    const set = new Set((facets.brands || []).map((b) => b?.trim()).filter(Boolean));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [facets.brands]);
 
   useEffect(() => {
     api.get("/products/facets/").then((r) => setFacets(r.data)).catch(() => {});
@@ -123,7 +133,7 @@ export default function ProductForm() {
 
   return (
     <div className="formpage">
-      <Link to={editing ? `/products/${id}` : "/"} className="back">{editing ? "Back to product" : "Back to catalog"}</Link>
+      <Link to={editing ? `/products/${id}` : "/products"} className="back">{editing ? "Back to product" : "Back to catalog"}</Link>
       <h1>{editing ? "Edit product" : "Add product"}</h1>
       {banner && <div className="banner banner-error" role="alert">{banner}</div>}
       <form className="form two" onSubmit={submit} noValidate>
@@ -133,15 +143,54 @@ export default function ProductForm() {
             {fieldErr("name") && <span className="err">{fieldErr("name")}</span>}
           </label>
           <label>Brand
-            <input value={form.brand} onChange={set("brand")} list="brands" maxLength={100} aria-invalid={Boolean(fieldErr("brand"))} />
-            <datalist id="brands">{facets.brands.map((b) => <option key={b} value={b} />)}</datalist>
+            <input value={form.brand} onChange={set("brand")} list="brands" maxLength={100} placeholder="Brand name" aria-invalid={Boolean(fieldErr("brand"))} />
+            <datalist id="brands">{sortedBrands.map((b) => <option key={b} value={b} />)}</datalist>
             {fieldErr("brand") && <span className="err">{fieldErr("brand")}</span>}
           </label>
-          <label>Category
-            <input value={form.category} onChange={set("category")} list="cats" maxLength={100} aria-invalid={Boolean(fieldErr("category"))} />
-            <datalist id="cats">{facets.categories.map((c) => <option key={c} value={c} />)}</datalist>
+          <div className="field">
+            <label htmlFor="cat-input">
+              Category <span className="hint">(pick from list or type custom)</span>
+            </label>
+            <input
+              id="cat-input"
+              value={form.category}
+              onChange={set("category")}
+              list="categories-list"
+              maxLength={100}
+              placeholder="e.g. Beverages, Snacks or type any new category"
+              aria-invalid={Boolean(fieldErr("category"))}
+            />
+            <datalist id="categories-list">
+              {sortedCategories.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
             {fieldErr("category") && <span className="err">{fieldErr("category")}</span>}
-          </label>
+            {sortedCategories.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "6px" }}>
+                {sortedCategories.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, category: c }))}
+                    style={{
+                      background: form.category.toLowerCase() === c.toLowerCase() ? "#ffbd2e" : "#f1f3f9",
+                      color: form.category.toLowerCase() === c.toLowerCase() ? "#111344" : "#4a5073",
+                      border: form.category.toLowerCase() === c.toLowerCase() ? "1px solid #e5a722" : "1px solid #e1e4ee",
+                      borderRadius: "999px",
+                      padding: "3px 10px",
+                      fontSize: "0.78rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <label>Price (₹)
             <input type="number" min="0" step="0.01" inputMode="decimal" value={form.price} onChange={set("price")} aria-invalid={Boolean(fieldErr("price"))} />
             {fieldErr("price") && <span className="err">{fieldErr("price")}</span>}
@@ -174,8 +223,8 @@ export default function ProductForm() {
         {ai.note && <p className="ainote-line" role="status">{ai.note}</p>}
 
         <div className="row end">
-          <Link className="btn btn-outline" to={editing ? `/products/${id}` : "/"}>Cancel</Link>
-          <button className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : editing ? "Save changes" : "Add product"}</button>
+          <Link className="btn btn-outline" to={editing ? `/products/${id}` : "/products"}>Cancel</Link>
+          <button className="btn btn-yellow" disabled={saving}>{saving ? "Saving…" : editing ? "Save changes ↗" : "Add product ↗"}</button>
         </div>
       </form>
     </div>

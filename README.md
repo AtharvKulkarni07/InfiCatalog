@@ -85,7 +85,7 @@ npm run dev                 # http://localhost:5173
 | `CORS_ALLOWED_ORIGINS` | Comma-separated frontend origins. |
 | `CORS_ALLOWED_ORIGIN_REGEXES` | e.g. `^https://.*\.vercel\.app$` to allow Vercel preview URLs. |
 | `GEMINI_API_KEY` | Free key from https://aistudio.google.com/apikey. Optional (see fallbacks). |
-| `GEMINI_MODEL` | Defaults to `gemini-2.5-flash`. |
+| `GEMINI_MODEL` | Defaults to `gemini-3.5-flash-lite`. |
 | `SEED_DEMO_DATA` | `true` seeds demo data on each start (idempotent). |
 | `AI_THROTTLE_RATE` | AI endpoint rate limit, default `30/min`. |
 

@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from genai import services
@@ -88,11 +88,18 @@ class ProductTests(TestCase):
     def test_facets(self):
         make_product(self.alice, price=10)
         make_product(self.alice, name="Tea", category="Beverages", price=90)
+        make_product(self.alice, name="Coffee", category="Beverages", price=120)  # duplicate category
         r = self.client.get("/api/products/facets/")
-        self.assertEqual(r.data["categories"], ["Beverages", "Snacks"])
+        self.assertEqual(r.data["categories"], ["Beverages", "Snacks"])  # deduplicated and alphabetical
+        self.assertIn("category_brands", r.data)
+
+        # Filter by category
+        r_bev = self.client.get("/api/products/facets/", {"category": "Beverages"})
+        self.assertEqual(r_bev.data["brands"], ["CrunchCo"])
 
 
 class GenAITests(TestCase):
+    @override_settings(GEMINI_API_KEY="")
     def test_rule_based_search_fallback(self):
         res = services.parse_search_query("cheap snacks under 500 from CrunchCo", ["Snacks", "Beverages"], ["CrunchCo"])
         f = res["filters"]
@@ -112,6 +119,7 @@ class GenAITests(TestCase):
         self.assertEqual((f["min_price"], f["max_price"]), (100, 900))
         self.assertNotIn("ordering", f)
 
+    @override_settings(GEMINI_API_KEY="")
     def test_endpoints_work_without_api_key(self):
         user = User.objects.create_user("u", "u@x.com", "pass12345!")
         c = APIClient()
@@ -123,3 +131,27 @@ class GenAITests(TestCase):
         r = c.post("/api/ai/suggest-tags/", {"name": "Almond Mix", "brand": "B", "category": "Snacks"}, format="json")
         self.assertTrue(r.data["tags"])
         self.assertEqual(APIClient().post("/api/ai/search/", {"query": "tea"}, format="json").status_code, 200)
+
+    def test_tags_and_exclusions_and_relaxation(self):
+        c = APIClient()
+        make_product(name="Sugar Cola", category="Beverages", brand="Fizz", price=40, tags=["soda", "sugar"])
+        make_product(name="Green Tea", category="Beverages", brand="HerbCo", price=90, tags=["tea", "herbal", "zero sugar"])
+        make_product(name="Black Coffee", category="Beverages", brand="RoastCo", price=250, tags=["coffee", "caffeine"])
+
+        # Tags filter
+        r_tag = c.get("/api/products/", {"tags": "herbal"})
+        self.assertEqual(r_tag.data["count"], 1)
+        self.assertEqual(r_tag.data["results"][0]["name"], "Green Tea")
+
+        # Exclude filter
+        r_ex = c.get("/api/products/", {"category": "Beverages", "exclude": "sugar"})
+        names = [p["name"] for p in r_ex.data["results"]]
+        self.assertNotIn("Sugar Cola", names)
+        self.assertIn("Green Tea", names)
+        self.assertIn("Black Coffee", names)
+
+        # Zero-result relaxation when price is too low
+        r_rel = c.get("/api/products/", {"category": "Beverages", "brand": "RoastCo", "max_price": 50})
+        self.assertTrue(r_rel.data.get("relaxed"))
+        self.assertIn("relaxation_note", r_rel.data)
+        self.assertEqual(r_rel.data["count"], 1)

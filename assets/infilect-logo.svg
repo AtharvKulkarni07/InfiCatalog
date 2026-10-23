@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 48" fill="none">
+  <rect width="44" height="44" y="2" rx="10" fill="#1769AA"/>
+  <rect x="9" y="30" width="26" height="5" rx="2.5" fill="#FFBD2E"/>
+  <rect x="9" y="13" width="12" height="12" rx="3" fill="#FFFFFF"/>
+  <rect x="23" y="17" width="12" height="8" rx="3" fill="#FFFFFF"/>
+  <text x="56" y="32" font-family="'Barlow Condensed', 'Inter', sans-serif" font-size="28" font-weight="700" letter-spacing="1.2" fill="#FFFFFF">
+    INFI<tspan fill="#36B7D8">CATALOG</tspan>
+  </text>
+</svg>

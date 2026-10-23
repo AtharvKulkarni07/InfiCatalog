@@ -17,7 +17,11 @@ class ProductSerializer(serializers.ModelSerializer):
 
     def get_is_owner(self, obj) -> bool:
         request = self.context.get("request")
-        return bool(request and request.user.is_authenticated and obj.owner_id == request.user.id)
+        return bool(
+            request
+            and request.user.is_authenticated
+            and (obj.owner_id == request.user.id or request.user.is_staff or request.user.is_superuser)
+        )
 
     @staticmethod
     def _clean_text(value, label):

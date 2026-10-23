@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, formatPrice, parseError } from "../api.js";
 import { useAuth } from "../auth.jsx";
@@ -16,16 +16,32 @@ const SORTS = [
   { value: "name", label: "Name: A to Z" },
   { value: "-name", label: "Name: Z to A" },
 ];
-const FILTER_KEYS = ["search", "category", "brand", "min_price", "max_price", "mine"];
+const FILTER_KEYS = ["search", "category", "brand", "min_price", "max_price", "tags", "exclude"];
+
+const QUICK_SUGGESTIONS = [
+  { label: "⚡ Morning workout energy", prompt: "something for morning workout energy" },
+  { label: "🧴 Anti-dandruff care", prompt: "dry scalp and dandruff" },
+  { label: "🍽️ Clean oily utensils", prompt: "clean oily utensils" },
+  { label: "🍃 Sugar-free drinks", prompt: "drinks without sugar" },
+  { label: "💻 Late night snacks", prompt: "crispy snacks under 150" },
+];
 
 function describeFilters(f) {
   const chips = [];
-  if (f.category) chips.push(`Category: ${f.category}`);
-  if (f.brand) chips.push(`Brand: ${f.brand}`);
-  if (f.search) chips.push(`Keywords: ${f.search}`);
-  if (f.min_price != null) chips.push(`Over ${formatPrice(f.min_price)}`);
-  if (f.max_price != null) chips.push(`Under ${formatPrice(f.max_price)}`);
-  if (f.ordering) chips.push(SORTS.find((s) => s.value === f.ordering)?.label || f.ordering);
+  if (f.category) chips.push({ key: "category", label: `Category: ${f.category}` });
+  if (f.brand) chips.push({ key: "brand", label: `Brand: ${f.brand}` });
+  if (f.tags) {
+    const list = Array.isArray(f.tags) ? f.tags : String(f.tags).split(",");
+    list.map((t) => t.trim()).filter(Boolean).forEach((t) => chips.push({ key: "tags", val: t, label: `#${t}` }));
+  }
+  if (f.search) chips.push({ key: "search", label: `Keyword: "${f.search}"` });
+  if (f.exclude) {
+    const list = Array.isArray(f.exclude) ? f.exclude : String(f.exclude).split(",");
+    list.map((e) => e.trim()).filter(Boolean).forEach((e) => chips.push({ key: "exclude", val: e, label: `No: ${e}` }));
+  }
+  if (f.min_price != null && f.min_price !== "") chips.push({ key: "min_price", label: `Over ${formatPrice(f.min_price)}` });
+  if (f.max_price != null && f.max_price !== "") chips.push({ key: "max_price", label: `Under ${formatPrice(f.max_price)}` });
+  if (f.ordering) chips.push({ key: "ordering", label: SORTS.find((s) => s.value === f.ordering)?.label || f.ordering });
   return chips;
 }
 
@@ -36,7 +52,7 @@ export default function Products() {
   const queryString = params.toString();
   const page = Number(params.get("page")) || 1;
 
-  const [facets, setFacets] = useState({ categories: [], brands: [] });
+  const [facets, setFacets] = useState({ categories: [], brands: [], category_brands: {} });
   const [state, setState] = useState({ status: "loading", data: null, error: "" });
   const [tick, setTick] = useState(0);
   const [q, setQ] = useState(params.get("search") || "");
@@ -46,8 +62,32 @@ export default function Products() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [price, setPrice] = useState({ min: params.get("min_price") || "", max: params.get("max_price") || "" });
 
+  const selectedCategory = params.get("category") || "";
+
+  // Unique categories sorted in alphabetical order
+  const sortedCategories = useMemo(() => {
+    const set = new Set((facets.categories || []).map((c) => c?.trim()).filter(Boolean));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [facets.categories]);
+
+  // Unique brands related to selected category, sorted in alphabetical order
+  const availableBrands = useMemo(() => {
+    let list = [];
+    if (!selectedCategory) {
+      list = facets.brands || [];
+    } else if (facets.category_brands) {
+      const matchKey = Object.keys(facets.category_brands).find(
+        (k) => k.toLowerCase() === selectedCategory.toLowerCase()
+      );
+      list = matchKey ? facets.category_brands[matchKey] : [];
+    } else {
+      list = facets.brands || [];
+    }
+    const set = new Set(list.map((b) => b?.trim()).filter(Boolean));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [selectedCategory, facets]);
+
   const update = useCallback((patch) => {
-    setAiNote(null);
     setParams((prev) => {
       const next = new URLSearchParams(prev);
       Object.entries(patch).forEach(([k, v]) => (v === "" || v == null ? next.delete(k) : next.set(k, String(v))));
@@ -56,16 +96,53 @@ export default function Products() {
     });
   }, [setParams]);
 
+  const removeFilter = (key, val) => {
+    if (key === "tags" && val) {
+      const current = (params.get("tags") || "").split(",").map((t) => t.trim()).filter(Boolean);
+      const remaining = current.filter((t) => t.toLowerCase() !== val.toLowerCase());
+      update({ tags: remaining.join(",") });
+    } else if (key === "exclude" && val) {
+      const current = (params.get("exclude") || "").split(",").map((e) => e.trim()).filter(Boolean);
+      const remaining = current.filter((e) => e.toLowerCase() !== val.toLowerCase());
+      update({ exclude: remaining.join(",") });
+    } else {
+      update({ [key]: "" });
+    }
+  };
+
+  const handleCategoryChange = (e) => {
+    const newCat = e.target.value;
+    const currentBrand = params.get("brand") || "";
+    let shouldClearBrand = false;
+
+    if (newCat && facets.category_brands) {
+      const matchKey = Object.keys(facets.category_brands).find(
+        (k) => k.toLowerCase() === newCat.toLowerCase()
+      );
+      const catBrands = matchKey ? facets.category_brands[matchKey] : [];
+      if (currentBrand && !catBrands.some((b) => b.toLowerCase() === currentBrand.toLowerCase())) {
+        shouldClearBrand = true;
+      }
+    }
+
+    update({
+      category: newCat,
+      ...(shouldClearBrand ? { brand: "" } : {}),
+      page: "",
+    });
+  };
+
   // facets for the dropdowns
   useEffect(() => {
-    api.get("/products/facets/").then((r) => setFacets(r.data)).catch(() => {});
+    api.get("/products/facets/", { params: { mine: "true" } }).then((r) => setFacets(r.data)).catch(() => {});
   }, []);
 
-  // load products whenever the URL query changes
+  // load products whenever the URL query changes — always force mine=true
   useEffect(() => {
     const ctrl = new AbortController();
     setState((s) => ({ ...s, status: "loading", error: "" }));
-    api.get("/products/", { params: Object.fromEntries(new URLSearchParams(queryString)), signal: ctrl.signal })
+    const qParams = { ...Object.fromEntries(new URLSearchParams(queryString)), mine: "true" };
+    api.get("/products/", { params: qParams, signal: ctrl.signal })
       .then((r) => setState({ status: "ready", data: r.data, error: "" }))
       .catch((e) => {
         if (e.response?.status === 404 && page > 1) return update({ page: "" }); // page out of range
@@ -90,17 +167,25 @@ export default function Products() {
 
   const switchMode = (on) => { setSmart(on); setQ(on ? "" : params.get("search") || ""); };
 
-  const runSmart = async (e) => {
-    e.preventDefault();
-    const text = q.trim();
+  const runSmart = async (e, directText = null) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const text = (directText != null ? directText : q).trim();
     if (!text) return;
+    if (directText != null) setQ(text);
     setAiBusy(true);
     try {
       const { data } = await api.post("/ai/search/", { query: text });
       const next = new URLSearchParams();
-      Object.entries(data.filters || {}).forEach(([k, v]) => next.set(k, String(v)));
+      Object.entries(data.filters || {}).forEach(([k, v]) => {
+        if (v !== "" && v != null) next.set(k, String(v));
+      });
       setParams(next);
-      setAiNote({ chips: describeFilters(data.filters || {}), source: data.source, text });
+      setAiNote({
+        filters: data.filters || {},
+        reasoning: data.reasoning || "",
+        source: data.source,
+        text,
+      });
     } catch (err) {
       toast(parseError(err).message || "Smart search failed.", "error");
     } finally {
@@ -123,13 +208,19 @@ export default function Products() {
     <>
       <section className="page-head">
         <div>
-          <h1>Product catalog</h1>
-          <p className="sub">Search by keyword, or describe what you need and let AI set the filters.</p>
+          <div className="kicker">MY WORKSPACE</div>
+          <h1>My Catalog</h1>
+          <p className="sub">Your personal product catalog — add, edit, and organise your listings.</p>
         </div>
-        {user && <Link className="btn btn-primary" to="/products/new">Add product</Link>}
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+          <Link className="btn btn-outline" to="/catalog">
+            🌐 Global Catalog
+          </Link>
+          {user && <Link className="btn btn-yellow" to="/products/new">+ Add product</Link>}
+        </div>
       </section>
 
-      <form className={`searchbar ${smart ? "is-smart" : ""}`} role="search" onSubmit={smart ? runSmart : (e) => e.preventDefault()}>
+      <form className={`searchbar ${smart ? "is-smart" : ""}`} role="search" onSubmit={smart ? (e) => runSmart(e) : (e) => e.preventDefault()}>
         <div className="modes" role="group" aria-label="Search mode">
           <button type="button" aria-pressed={!smart} className={!smart ? "on" : ""} onClick={() => switchMode(false)}>Keyword</button>
           <button type="button" aria-pressed={smart} className={smart ? "on" : ""} onClick={() => switchMode(true)}><Sparkle size={14} /> Smart search</button>
@@ -139,16 +230,64 @@ export default function Products() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           aria-label={smart ? "Describe what you're looking for" : "Search products"}
-          placeholder={smart ? 'Try "cheap snacks under 200" or "SonicWave headphones"' : "Search by name, brand or category"}
+          placeholder={smart ? 'Try "morning workout energy" or "clean oily utensils" or "sugar-free drinks"' : "Search by name, brand or category"}
         />
-        {smart && <button className="btn btn-accent" disabled={aiBusy || !q.trim()}>{aiBusy ? "Thinking…" : "Find"}</button>}
+        {smart && <button className="btn btn-yellow" disabled={aiBusy || !q.trim()}>{aiBusy ? "Thinking…" : <>Find <span className="arrow">↗</span></>}</button>}
       </form>
+
+      {smart && (
+        <div className="search-suggestions" aria-label="Quick smart search prompts">
+          <span className="suggestion-label">Try asking:</span>
+          {QUICK_SUGGESTIONS.map((s) => (
+            <button
+              key={s.label}
+              type="button"
+              className="suggestion-pill"
+              onClick={() => runSmart(null, s.prompt)}
+              disabled={aiBusy}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {aiNote && (
         <div className="ainote" role="status">
-          <span className="ai-label"><Sparkle size={14} /> Understood “{aiNote.text}” as</span>
-          {aiNote.chips.length ? aiNote.chips.map((c) => <span className="chip" key={c}>{c}</span>) : <span className="chip">no filters, showing everything</span>}
-          <span className="src">{aiNote.source === "llm" ? "via Gemini" : "via built-in rules"}</span>
+          <div className="ainote-header">
+            <span className="ai-label">
+              <Sparkle size={15} /> AI Search Intent
+            </span>
+            <span className="src">
+              {aiNote.source === "llm" ? "✦ Gemini 3.5" : "✦ Rule Engine"}
+            </span>
+          </div>
+
+          {aiNote.reasoning && (
+            <div className="ainote-reasoning">
+              {aiNote.reasoning}
+            </div>
+          )}
+
+          <div className="ainote-chips">
+            {describeFilters(aiNote.filters || {}).length ? (
+              describeFilters(aiNote.filters || {}).map((c, idx) => (
+                <span className="chip removable" key={`${c.key}-${c.val || idx}`}>
+                  <span>{c.label}</span>
+                  <button
+                    type="button"
+                    className="chip-remove"
+                    title={`Remove ${c.label}`}
+                    onClick={() => removeFilter(c.key, c.val)}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))
+            ) : (
+              <span className="chip">No restrictive filters applied</span>
+            )}
+          </div>
         </div>
       )}
 
@@ -159,15 +298,15 @@ export default function Products() {
       <div className="layout">
         <aside className={`filters ${filtersOpen ? "open" : ""}`} aria-label="Filters">
           <label>Category
-            <select value={params.get("category") || ""} onChange={(e) => update({ category: e.target.value })}>
+            <select value={selectedCategory} onChange={handleCategoryChange}>
               <option value="">All categories</option>
-              {facets.categories.map((c) => <option key={c}>{c}</option>)}
+              {sortedCategories.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
           <label>Brand
             <select value={params.get("brand") || ""} onChange={(e) => update({ brand: e.target.value })}>
               <option value="">All brands</option>
-              {facets.brands.map((b) => <option key={b}>{b}</option>)}
+              {availableBrands.map((b) => <option key={b} value={b}>{b}</option>)}
             </select>
           </label>
           <fieldset>
@@ -178,12 +317,6 @@ export default function Products() {
             </div>
             <button type="button" className="btn btn-outline block" onClick={applyPrice}>Apply price</button>
           </fieldset>
-          {user && (
-            <label className="check">
-              <input type="checkbox" checked={params.get("mine") === "true"} onChange={(e) => update({ mine: e.target.checked ? "true" : "" })} />
-              Only my products
-            </label>
-          )}
           {hasFilters && <button type="button" className="linkbtn" onClick={clearAll}>Clear all filters</button>}
         </aside>
 
@@ -197,6 +330,16 @@ export default function Products() {
             </label>
           </div>
 
+          {state.status === "ready" && state.data?.relaxed && (
+            <div className="relaxation-banner" role="alert">
+              <span className="relaxation-icon">💡</span>
+              <div>
+                <strong>Smart Relaxation Applied</strong>
+                <p>{state.data.relaxation_note}</p>
+              </div>
+            </div>
+          )}
+
           {state.status === "loading" && <SkeletonGrid />}
           {state.status === "error" && <ErrorBox message={state.error} onRetry={() => setTick((t) => t + 1)} />}
           {state.status === "ready" && total === 0 && (
@@ -206,8 +349,9 @@ export default function Products() {
                 <button className="linkbtn" onClick={clearAll}>Clear all filters</button>
               </Empty>
             ) : (
-              <Empty title="The catalog is empty">
-                {user ? <>Add the first product to get started. <Link to="/products/new">Add product</Link></> : <><Link to="/login">Sign in</Link> to add the first product.</>}
+              <Empty title="Your catalog is empty">
+                You haven't added any products yet.{" "}
+                <Link to="/products/new">Add your first product</Link> or browse the <Link to="/catalog">Global Catalog</Link>.
               </Empty>
             )
           )}

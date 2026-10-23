@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.db.models import Q
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -50,6 +51,14 @@ class LoginSerializer(TokenObtainPairSerializer):
     """Returns the user profile alongside the token pair."""
 
     def validate(self, attrs):
+        raw_username = attrs.get(self.username_field, "").strip()
+        if raw_username:
+            matched_user = User.objects.filter(
+                Q(username__iexact=raw_username) | Q(email__iexact=raw_username)
+            ).first()
+            if matched_user:
+                attrs[self.username_field] = matched_user.get_username()
+
         data = super().validate(attrs)
         data["user"] = UserSerializer(self.user).data
         return data
