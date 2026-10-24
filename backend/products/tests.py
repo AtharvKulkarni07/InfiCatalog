@@ -24,6 +24,11 @@ class AuthTests(TestCase):
         self.assertIn("access", r.data)
         r = self.client.post("/api/auth/login/", {"username": "ana", "password": "Str0ng!Pass99"}, format="json")
         self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.data["user"]["username"], "ana")
+        # Login using email
+        r_email = self.client.post("/api/auth/login/", {"username": "ana@x.com", "password": "Str0ng!Pass99"}, format="json")
+        self.assertEqual(r_email.status_code, 200)
+        self.assertEqual(r_email.data["user"]["username"], "ana")
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {r.data['access']}")
         self.assertEqual(self.client.get("/api/auth/me/").data["username"], "ana")
 
