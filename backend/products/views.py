@@ -110,20 +110,27 @@ class ProductViewSet(viewsets.ModelViewSet):
             queryset.count() if logger.isEnabledFor(logging.DEBUG) else "omitted",
         )
 
-        # Zero-result intelligent relaxation:
-        # If strict filtering returned 0 items, check if we can relax the most restrictive filter
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            # Zero-result intelligent relaxation:
+            # If strict filtering returned 0 items, check if we can relax the most restrictive filter
+            paginator_page = getattr(self.paginator, "page", None)
+            total_count = getattr(getattr(paginator_page, "paginator", None), "count", None)
+            if total_count == 0:
+                relaxed_qs, note = self._relax_query(request)
+                if relaxed_qs is not None and relaxed_qs.exists():
+                    page = self.paginate_queryset(relaxed_qs)
+                    logger.info("Search query relaxed: %s", note)
+                    if self.paginator is not None:
+                        setattr(self.paginator, "relaxation_note", note)
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
         if not queryset.exists():
             relaxed_qs, note = self._relax_query(request)
             if relaxed_qs is not None and relaxed_qs.exists():
                 queryset = relaxed_qs
                 logger.info("Search query relaxed: %s", note)
-                if self.paginator is not None:
-                    setattr(self.paginator, "relaxation_note", note)
-
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
 
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)

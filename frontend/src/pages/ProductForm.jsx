@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, firstError, parseError } from "../api.js";
+import { api, firstError, getCachedFacets, invalidateCachedFacets, parseError } from "../api.js";
 import { Sparkle } from "../components/Icons.jsx";
 import { ProductImage } from "../components/ProductCard.jsx";
 import { ErrorBox, Loading } from "../components/States.jsx";
@@ -37,7 +37,7 @@ export default function ProductForm() {
   }, [facets.brands]);
 
   useEffect(() => {
-    api.get("/products/facets/").then((r) => setFacets(r.data)).catch(() => {});
+    getCachedFacets().then((data) => setFacets(data)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -82,6 +82,7 @@ export default function ProductForm() {
     setSaving(true);
     try {
       const { data } = editing ? await api.put(`/products/${id}/`, payload) : await api.post("/products/", payload);
+      invalidateCachedFacets();
       toast(editing ? "Changes saved" : "Product added");
       navigate(`/products/${data.id}`);
     } catch (err) {

@@ -19,11 +19,11 @@ const SORTS = [
 const FILTER_KEYS = ["search", "category", "brand", "min_price", "max_price", "tags", "exclude"];
 
 const QUICK_SUGGESTIONS = [
-  { label: "⚡ Morning workout energy", prompt: "something for morning workout energy" },
-  { label: "🧴 Anti-dandruff care", prompt: "dry scalp and dandruff" },
-  { label: "🍽️ Clean oily utensils", prompt: "clean oily utensils" },
-  { label: "🍃 Sugar-free drinks", prompt: "drinks without sugar" },
-  { label: "💻 Late night snacks", prompt: "crispy snacks under 150" },
+  { label: "Morning workout energy", prompt: "something for morning workout energy" },
+  { label: "Anti-dandruff care", prompt: "dry scalp and dandruff" },
+  { label: "Clean oily utensils", prompt: "clean oily utensils" },
+  { label: "Sugar-free drinks", prompt: "drinks without sugar" },
+  { label: "Late night snacks", prompt: "crispy snacks under 150" },
 ];
 
 function describeFilters(f) {

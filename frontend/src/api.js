@@ -16,7 +16,7 @@ export const tokens = {
   },
 };
 
-export const api = axios.create({ baseURL: API_URL, timeout: 20000 });
+export const api = axios.create({ baseURL: API_URL, timeout: 60000 });
 
 api.interceptors.request.use((config) => {
   const { access } = tokens.read();
@@ -29,8 +29,19 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const { response, config } = error;
+    if (!config) return Promise.reject(error);
+
     const url = config?.url || "";
     const isAuthCall = /\/auth\/(login|register|refresh)/.test(url);
+
+    // Automatic retry for transient cold starts or network drop on GET requests
+    const isColdBootOrNetwork = !response || response.status === 502 || response.status === 503 || error.code === "ECONNABORTED";
+    if (isColdBootOrNetwork && !config._networkRetried && config.method?.toLowerCase() === "get") {
+      config._networkRetried = true;
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      return api(config);
+    }
+
     if (response?.status === 401 && !isAuthCall && tokens.read().access) {
       const { refresh } = tokens.read();
       if (refresh && !config._retried) {
@@ -50,10 +61,35 @@ api.interceptors.response.use(
   }
 );
 
+let cachedFacets = null;
+let facetsPromise = null;
+export async function getCachedFacets(category = "") {
+  if (category) {
+    const res = await api.get(`/products/facets/?category=${encodeURIComponent(category)}`);
+    return res.data;
+  }
+  if (cachedFacets) return cachedFacets;
+  if (!facetsPromise) {
+    facetsPromise = api.get("/products/facets/").then((r) => {
+      cachedFacets = r.data;
+      facetsPromise = null;
+      return cachedFacets;
+    }).catch((e) => {
+      facetsPromise = null;
+      throw e;
+    });
+  }
+  return facetsPromise;
+}
+
+export function invalidateCachedFacets() {
+  cachedFacets = null;
+}
+
 /** Normalise any failure into { message, fields } for the UI. */
 export function parseError(err) {
   if (err?.code === "ERR_CANCELED") return { message: "", fields: {} };
-  if (!err?.response) return { message: "Can't reach the server. Check your connection and try again.", fields: {} };
+  if (!err?.response) return { message: "Server is waking up or connection was interrupted. Please retry in a few seconds.", fields: {} };
   const e = err.response.data?.error;
   if (e) {
     const fields = e.details && typeof e.details === "object" ? e.details : {};

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { api, formatPrice, parseError } from "../api.js";
+import { api, formatPrice, getCachedFacets, parseError } from "../api.js";
 import { Sparkle } from "../components/Icons.jsx";
 import Pagination from "../components/Pagination.jsx";
 import ProductCard from "../components/ProductCard.jsx";
@@ -18,11 +18,11 @@ const SORTS = [
 const FILTER_KEYS = ["search", "category", "brand", "min_price", "max_price", "tags", "exclude"];
 
 const QUICK_SUGGESTIONS = [
-  { label: "⚡ Morning workout energy", prompt: "something for morning workout energy" },
-  { label: "🧴 Anti-dandruff care", prompt: "dry scalp and dandruff" },
-  { label: "🍽️ Clean oily utensils", prompt: "clean oily utensils" },
-  { label: "🍃 Sugar-free drinks", prompt: "drinks without sugar" },
-  { label: "💻 Late night snacks", prompt: "crispy snacks under 150" },
+  { label: "Morning workout energy", prompt: "something for morning workout energy" },
+  { label: "Anti-dandruff care", prompt: "dry scalp and dandruff" },
+  { label: "Clean oily utensils", prompt: "clean oily utensils" },
+  { label: "Sugar-free drinks", prompt: "drinks without sugar" },
+  { label: "Late night snacks", prompt: "crispy snacks under 150" },
 ];
 
 function describeFilters(f) {
@@ -124,7 +124,7 @@ export default function Catalog() {
   };
 
   useEffect(() => {
-    api.get("/products/facets/").then((r) => setFacets(r.data)).catch(() => {});
+    getCachedFacets().then((data) => setFacets(data)).catch(() => {});
   }, []);
 
   useEffect(() => {
