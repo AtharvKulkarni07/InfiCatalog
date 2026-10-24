@@ -20,12 +20,25 @@ class RegisterView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
     throttle_scope = "auth"
 
+    def perform_create(self, serializer):
+        user = serializer.save()
+        logger.info("New user registered: %s (%s)", user.username, user.email)
+
 
 class LoginView(TokenObtainPairView):
-    """Exchange username + password for access/refresh tokens."""
+    """Exchange username/email + password for access/refresh tokens."""
 
     serializer_class = LoginSerializer
     throttle_scope = "auth"
+
+    def post(self, request, *args, **kwargs):
+        res = super().post(request, *args, **kwargs)
+        if res.status_code == 200:
+            user_data = res.data.get("user", {})
+            logger.info("Successful login for user '%s' (id: %s)", user_data.get("username"), user_data.get("id"))
+        else:
+            logger.warning("Failed login attempt for identifier '%s'", request.data.get("username"))
+        return res
 
 
 class MeView(generics.RetrieveAPIView):

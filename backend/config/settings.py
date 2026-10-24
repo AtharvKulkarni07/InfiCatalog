@@ -164,11 +164,36 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "formatters": {"std": {"format": "%(asctime)s %(levelname)s %(name)s: %(message)s"}},
-    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "std"}},
+    "formatters": {
+        "verbose": {
+            "format": "%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
+        "std": {
+            "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose" if os.getenv("DJANGO_DEBUG", "False").lower() in ("true", "1") else "std",
+        }
+    },
     "root": {"handlers": ["console"], "level": os.getenv("LOG_LEVEL", "INFO")},
-    "loggers": {"django.db.backends": {"level": "WARNING"}},
+    "loggers": {
+        "django.request": {"level": "WARNING", "handlers": ["console"], "propagate": False},
+        "django.db.backends": {"level": "WARNING", "handlers": ["console"], "propagate": False},
+        "products": {"level": "DEBUG", "handlers": ["console"], "propagate": False},
+        "accounts": {"level": "DEBUG", "handlers": ["console"], "propagate": False},
+        "genai": {"level": "DEBUG", "handlers": ["console"], "propagate": False},
+    },
 }
+
+# HTTP Security Headers (OWASP Hardening)
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+SECURE_BROWSER_XSS_FILTER = True
+
 
 # ==============================================================================
 # Email Configuration (SMTP or Console fallback)

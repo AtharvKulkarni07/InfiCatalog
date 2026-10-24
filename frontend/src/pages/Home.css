@@ -1147,8 +1147,15 @@
   }
   .sliding-head {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
+    align-items: center;
+    text-align: center;
+    gap: 16px;
+  }
+  .sliding-head > div {
+    text-align: center;
+  }
+  .sliding-head .kicker {
+    text-align: center;
   }
   .sliding-head .btn {
     width: 100%;

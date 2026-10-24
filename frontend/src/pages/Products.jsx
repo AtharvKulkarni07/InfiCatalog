@@ -56,7 +56,8 @@ export default function Products() {
   const [state, setState] = useState({ status: "loading", data: null, error: "" });
   const [tick, setTick] = useState(0);
   const [q, setQ] = useState(params.get("search") || "");
-  const [smart, setSmart] = useState(false);
+  const [customCategoryFilter, setCustomCategoryFilter] = useState(false);
+  const [customBrandFilter, setCustomBrandFilter] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiNote, setAiNote] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -154,23 +155,17 @@ export default function Products() {
 
   // keep local inputs in sync with the URL (back/forward, AI search, clear)
   useEffect(() => {
-    if (!smart) setQ(params.get("search") || "");
+    setQ(params.get("search") || "");
     setPrice({ min: params.get("min_price") || "", max: params.get("max_price") || "" });
   }, [queryString]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // debounce keyword typing
-  useEffect(() => {
-    if (smart || q.trim() === (params.get("search") || "")) return;
-    const t = setTimeout(() => update({ search: q.trim() }), 400);
-    return () => clearTimeout(t);
-  }, [q, smart]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const switchMode = (on) => { setSmart(on); setQ(on ? "" : params.get("search") || ""); };
-
-  const runSmart = async (e, directText = null) => {
+  const handleUnifiedSearch = async (e, directText = null) => {
     if (e && e.preventDefault) e.preventDefault();
     const text = (directText != null ? directText : q).trim();
-    if (!text) return;
+    if (!text) {
+      clearAll();
+      return;
+    }
     if (directText != null) setQ(text);
     setAiBusy(true);
     try {
@@ -187,7 +182,7 @@ export default function Products() {
         text,
       });
     } catch (err) {
-      toast(parseError(err).message || "Smart search failed.", "error");
+      update({ search: text, page: "" });
     } finally {
       setAiBusy(false);
     }
@@ -219,37 +214,39 @@ export default function Products() {
         </div>
       </section>
 
-      <form className={`searchbar ${smart ? "is-smart" : ""}`} role="search" onSubmit={smart ? (e) => runSmart(e) : (e) => e.preventDefault()}>
-        <div className="modes" role="group" aria-label="Search mode">
-          <button type="button" aria-pressed={!smart} className={!smart ? "on" : ""} onClick={() => switchMode(false)}>Keyword</button>
-          <button type="button" aria-pressed={smart} className={smart ? "on" : ""} onClick={() => switchMode(true)}><Sparkle size={14} /> Smart search</button>
+      <form className="searchbar is-unified" role="search" onSubmit={handleUnifiedSearch}>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--blue)" }}>
+          <Sparkle size={18} />
         </div>
         <input
           type="search"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
-          aria-label={smart ? "Describe what you're looking for" : "Search products"}
-          placeholder={smart ? 'Try "morning workout energy" or "clean oily utensils" or "sugar-free drinks"' : "Search by name, brand or category"}
+          onChange={(e) => {
+            setQ(e.target.value);
+            if (!e.target.value.trim()) clearAll();
+          }}
+          aria-label="Search products"
+          placeholder='Search my products or prompt (e.g. "chips", "drinks under 200", "organic")...'
         />
-        {smart && <button className="btn btn-yellow" disabled={aiBusy || !q.trim()}>{aiBusy ? "Thinking…" : <>Find <span className="arrow">↗</span></>}</button>}
+        <button type="submit" className="btn btn-yellow" disabled={aiBusy || !q.trim()}>
+          {aiBusy ? "Searching…" : <>Search <span className="arrow">↗</span></>}
+        </button>
       </form>
 
-      {smart && (
-        <div className="search-suggestions" aria-label="Quick smart search prompts">
-          <span className="suggestion-label">Try asking:</span>
-          {QUICK_SUGGESTIONS.map((s) => (
-            <button
-              key={s.label}
-              type="button"
-              className="suggestion-pill"
-              onClick={() => runSmart(null, s.prompt)}
-              disabled={aiBusy}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="search-suggestions" aria-label="Quick search prompts">
+        <span className="suggestion-label">Quick prompts:</span>
+        {QUICK_SUGGESTIONS.map((s) => (
+          <button
+            key={s.label}
+            type="button"
+            className="suggestion-pill"
+            onClick={() => handleUnifiedSearch(null, s.prompt)}
+            disabled={aiBusy}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
 
       {aiNote && (
         <div className="ainote" role="status">
@@ -297,16 +294,58 @@ export default function Products() {
       <div className="layout">
         <aside className={`filters ${filtersOpen ? "open" : ""}`} aria-label="Filters">
           <label>Category
-            <select value={selectedCategory} onChange={handleCategoryChange}>
+            <select
+              value={customCategoryFilter ? "__custom__" : selectedCategory}
+              onChange={(e) => {
+                if (e.target.value === "__custom__") {
+                  setCustomCategoryFilter(true);
+                } else {
+                  setCustomCategoryFilter(false);
+                  handleCategoryChange(e);
+                }
+              }}
+            >
               <option value="">All categories</option>
               {sortedCategories.map((c) => <option key={c} value={c}>{c}</option>)}
+              <option value="__custom__">➕ Add Custom Filter...</option>
             </select>
+            {customCategoryFilter && (
+              <input
+                type="text"
+                placeholder="Type custom category..."
+                value={params.get("category") || ""}
+                onChange={(e) => update({ category: e.target.value, page: "" })}
+                autoFocus
+                style={{ marginTop: "6px" }}
+              />
+            )}
           </label>
           <label>Brand
-            <select value={params.get("brand") || ""} onChange={(e) => update({ brand: e.target.value })}>
+            <select
+              value={customBrandFilter ? "__custom__" : (params.get("brand") || "")}
+              onChange={(e) => {
+                if (e.target.value === "__custom__") {
+                  setCustomBrandFilter(true);
+                } else {
+                  setCustomBrandFilter(false);
+                  update({ brand: e.target.value });
+                }
+              }}
+            >
               <option value="">All brands</option>
               {availableBrands.map((b) => <option key={b} value={b}>{b}</option>)}
+              <option value="__custom__">➕ Add Custom Filter...</option>
             </select>
+            {customBrandFilter && (
+              <input
+                type="text"
+                placeholder="Type custom brand..."
+                value={params.get("brand") || ""}
+                onChange={(e) => update({ brand: e.target.value, page: "" })}
+                autoFocus
+                style={{ marginTop: "6px" }}
+              />
+            )}
           </label>
           <fieldset>
             <legend>Price (₹)</legend>

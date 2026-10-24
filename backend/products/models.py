@@ -1,9 +1,12 @@
+import uuid
+
 from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
 
 
 class Product(models.Model):
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
     name = models.CharField(max_length=200)
     brand = models.CharField(max_length=100, db_index=True)
     category = models.CharField(max_length=100, db_index=True)
@@ -23,3 +26,4 @@ class Product(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.brand})"
+

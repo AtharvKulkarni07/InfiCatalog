@@ -4,16 +4,18 @@ from .models import Product
 
 
 class ProductSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source="uuid", read_only=True)
+    uuid = serializers.UUIDField(read_only=True)
     owner_username = serializers.CharField(source="owner.username", read_only=True, default=None)
     is_owner = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
         fields = [
-            "id", "name", "brand", "category", "description", "price", "image_url",
+            "id", "uuid", "name", "brand", "category", "description", "price", "image_url",
             "tags", "owner_username", "is_owner", "created_at", "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "uuid", "created_at", "updated_at"]
 
     def get_is_owner(self, obj) -> bool:
         request = self.context.get("request")
@@ -44,6 +46,14 @@ class ProductSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Price must be greater than zero.")
         return value
 
+    def validate_image_url(self, value):
+        val = (value or "").strip()
+        if not val:
+            return ""
+        if not (val.startswith("https://") or val.startswith("http://")):
+            raise serializers.ValidationError("Image URL must start with http:// or https://")
+        return val
+
     def validate_tags(self, value):
         if not isinstance(value, list) or not all(isinstance(t, str) for t in value):
             raise serializers.ValidationError("Tags must be a list of strings.")
@@ -55,3 +65,4 @@ class ProductSerializer(serializers.ModelSerializer):
         if len(cleaned) > 10:
             raise serializers.ValidationError("Use at most 10 tags.")
         return cleaned
+

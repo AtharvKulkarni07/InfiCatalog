@@ -1,4 +1,5 @@
 import logging
+import uuid
 
 from django.core.cache import cache
 from django.db.models import Max, Min, Q
@@ -6,6 +7,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
@@ -71,10 +73,42 @@ class ProductViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, SmartSearchFilter, OrderingFilter]
     search_fields = ["name", "brand", "category", "description", "tags"]
     ordering_fields = ["price", "name", "created_at"]
-    ordering = ["-created_at"]
+    lookup_field = "uuid"
+
+    def get_object(self):
+        lookup = self.kwargs.get("uuid") or self.kwargs.get("pk")
+        queryset = self.filter_queryset(self.get_queryset())
+
+        # 1. Try as UUID
+        try:
+            val = uuid.UUID(str(lookup))
+            obj = queryset.get(uuid=val)
+            self.check_object_permissions(self.request, obj)
+            logger.debug("Product retrieved via UUID %s by %s", val, self.request.user)
+            return obj
+        except (ValueError, Product.DoesNotExist):
+            pass
+
+        # 2. Backwards-compatible integer ID fallback
+        if str(lookup).isdigit():
+            try:
+                obj = queryset.get(pk=int(lookup))
+                self.check_object_permissions(self.request, obj)
+                logger.debug("Product retrieved via int ID %s by %s", lookup, self.request.user)
+                return obj
+            except Product.DoesNotExist:
+                pass
+
+        logger.warning("Product lookup failed for %s", lookup)
+        raise NotFound("Product not found.")
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
+        logger.debug(
+            "Listing products with params %s (initial count: %s)",
+            dict(request.query_params),
+            queryset.count() if logger.isEnabledFor(logging.DEBUG) else "omitted",
+        )
 
         # Zero-result intelligent relaxation:
         # If strict filtering returned 0 items, check if we can relax the most restrictive filter
@@ -82,6 +116,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             relaxed_qs, note = self._relax_query(request)
             if relaxed_qs is not None and relaxed_qs.exists():
                 queryset = relaxed_qs
+                logger.info("Search query relaxed: %s", note)
                 if self.paginator is not None:
                     setattr(self.paginator, "relaxation_note", note)
 
@@ -130,14 +165,14 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         product = serializer.save(owner=self.request.user)
-        logger.info("Product %s created by %s", product.pk, self.request.user.username)
+        logger.info("Product %s (uuid: %s) created by %s", product.pk, product.uuid, self.request.user.username)
 
     def perform_update(self, serializer):
         product = serializer.save()
-        logger.info("Product %s updated by %s", product.pk, self.request.user.username)
+        logger.info("Product %s (uuid: %s) updated by %s", product.pk, product.uuid, self.request.user.username)
 
     def perform_destroy(self, instance):
-        logger.info("Product %s deleted by %s", instance.pk, self.request.user.username)
+        logger.info("Product %s (uuid: %s) deleted by %s", instance.pk, instance.uuid, self.request.user.username)
         instance.delete()
 
     @extend_schema(
@@ -150,34 +185,39 @@ class ProductViewSet(viewsets.ModelViewSet):
         selected_category = request.query_params.get("category", "").strip()
 
         # Cache key per user workspace or global catalog
-        cache_key = f"catalog:facets:{request.user.id if is_mine else 'global'}:{selected_category.lower()}"
+        cache_key = f"catalog:facets:{request.user.id if is_mine else 'global'}:{selected_category.lower() or 'all'}"
         cached = cache.get(cache_key)
         if cached is not None:
+            logger.debug("Facets cache HIT for key %s", cache_key)
             return Response(cached)
 
+        logger.debug("Facets cache MISS for key %s, querying database", cache_key)
         qs = Product.objects.all()
         if is_mine:
             qs = qs.filter(owner=request.user)
 
-        # Build category -> brands mapping for instant frontend filtering
+        # REDUCED DB CALLS: Single query for distinct (category, brand) pairs
         cat_brands = {}
+        all_brands = set()
         for cat, brand in qs.order_by().values_list("category", "brand").distinct():
             c = (cat or "").strip()
             b = (brand or "").strip()
-            if c and b:
-                cat_brands.setdefault(c, set()).add(b)
+            if c:
+                if b:
+                    cat_brands.setdefault(c, set()).add(b)
+                    all_brands.add(b)
+                else:
+                    cat_brands.setdefault(c, set())
 
-        categories = sorted(
-            {c.strip() for c in qs.order_by().values_list("category", flat=True) if c and c.strip()},
-            key=str.lower,
-        )
+        categories = sorted(cat_brands.keys(), key=str.lower)
 
-        brand_qs = qs.filter(category__iexact=selected_category) if selected_category else qs
-        brands = sorted(
-            {b.strip() for b in brand_qs.order_by().values_list("brand", flat=True) if b and b.strip()},
-            key=str.lower,
-        )
+        if selected_category:
+            match = next((v for k, v in cat_brands.items() if k.lower() == selected_category.lower()), set())
+            brands = sorted(match, key=str.lower)
+        else:
+            brands = sorted(all_brands, key=str.lower)
 
+        # Single query for price aggregation
         bounds = qs.aggregate(min=Min("price"), max=Max("price"))
         data = {
             "categories": categories,

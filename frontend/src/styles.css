@@ -351,9 +351,15 @@ main.main-home {
   flex-wrap: wrap;
 }
 
-.searchbar.is-smart {
-  border-color: var(--cyan);
-  box-shadow: 0 0 0 4px rgba(54, 183, 216, 0.15);
+.searchbar.is-smart,
+.searchbar.is-unified {
+  border-color: #36b7d8;
+  box-shadow: 0 4px 20px rgba(54, 183, 216, 0.12);
+}
+
+.searchbar.is-unified:focus-within {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 4px rgba(23, 105, 170, 0.16);
 }
 
 .searchbar input {
