@@ -155,3 +155,50 @@ class GenAITests(TestCase):
         self.assertTrue(r_rel.data.get("relaxed"))
         self.assertIn("relaxation_note", r_rel.data)
         self.assertEqual(r_rel.data["count"], 1)
+
+
+class CacheTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.client = APIClient()
+        self.user = User.objects.create_user("cache_user", "cu@x.com", "pass12345!")
+
+    def test_facets_caching_and_signal_invalidation(self):
+        from django.core.cache import cache
+        make_product(self.user, name="Chips", category="Snacks", brand="CrunchCo")
+        
+        # First request populates cache
+        r1 = self.client.get("/api/products/facets/")
+        self.assertEqual(r1.status_code, 200)
+        self.assertIn("Snacks", r1.data["categories"])
+
+        # Cache should now contain the key
+        cache_key = "catalog:facets:global:all"
+        cached_data = cache.get(cache_key)
+        self.assertIsNotNone(cached_data)
+        self.assertEqual(cached_data["categories"], ["Snacks"])
+
+        # Saving a new product should trigger signal and invalidate the cache
+        new_prod = make_product(self.user, name="Soda", category="Beverages", brand="Fizz")
+        self.assertIsNone(cache.get(cache_key))
+
+        # Re-fetch should re-populate with new category
+        r2 = self.client.get("/api/products/facets/")
+        self.assertEqual(r2.status_code, 200)
+        self.assertIn("Beverages", r2.data["categories"])
+
+        # Deleting a product should also invalidate cache
+        new_prod.delete()
+        self.assertIsNone(cache.get(cache_key))
+
+    @override_settings(GEMINI_API_KEY="")
+    def test_ai_search_query_caching(self):
+        from django.core.cache import cache
+        res1 = services.parse_search_query("crispy chips under 200", ["Snacks"], ["CrunchCo"])
+        self.assertIn("filters", res1)
+
+        # Second identical query should retrieve from cache
+        res2 = services.parse_search_query("crispy chips under 200", ["Snacks"], ["CrunchCo"])
+        self.assertEqual(res1["filters"], res2["filters"])
+

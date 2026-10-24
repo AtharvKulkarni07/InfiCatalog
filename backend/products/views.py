@@ -1,5 +1,6 @@
 import logging
 
+from django.core.cache import cache
 from django.db.models import Max, Min, Q
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
@@ -145,10 +146,18 @@ class ProductViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=["get"], pagination_class=None, filter_backends=[])
     def facets(self, request):
-        qs = Product.objects.all()
-        if request.query_params.get("mine") in ("true", "1") and request.user.is_authenticated:
-            qs = qs.filter(owner=request.user)
+        is_mine = request.query_params.get("mine") in ("true", "1") and request.user.is_authenticated
         selected_category = request.query_params.get("category", "").strip()
+
+        # Cache key per user workspace or global catalog
+        cache_key = f"catalog:facets:{request.user.id if is_mine else 'global'}:{selected_category.lower()}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
+        qs = Product.objects.all()
+        if is_mine:
+            qs = qs.filter(owner=request.user)
 
         # Build category -> brands mapping for instant frontend filtering
         cat_brands = {}
@@ -170,12 +179,12 @@ class ProductViewSet(viewsets.ModelViewSet):
         )
 
         bounds = qs.aggregate(min=Min("price"), max=Max("price"))
-        return Response(
-            {
-                "categories": categories,
-                "brands": brands,
-                "category_brands": {c: sorted(list(b_set), key=str.lower) for c, b_set in cat_brands.items()},
-                "price_min": bounds["min"],
-                "price_max": bounds["max"],
-            }
-        )
+        data = {
+            "categories": categories,
+            "brands": brands,
+            "category_brands": {c: sorted(list(b_set), key=str.lower) for c, b_set in cat_brands.items()},
+            "price_min": bounds["min"],
+            "price_max": bounds["max"],
+        }
+        cache.set(cache_key, data, timeout=1800)  # Cache for 30 minutes
+        return Response(data)

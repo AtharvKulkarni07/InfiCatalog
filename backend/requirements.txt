@@ -9,3 +9,5 @@ psycopg2-binary>=2.9
 gunicorn>=22.0
 whitenoise>=6.7
 requests>=2.32
+django-redis>=5.4.0
+redis>=5.0.0

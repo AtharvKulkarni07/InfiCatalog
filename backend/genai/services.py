@@ -3,12 +3,14 @@
 Design: every feature has a deterministic fallback, so the product never breaks when the LLM key is
 missing, rate limited, or returns garbage. Responses say which path produced them via `source`.
 """
+import hashlib
 import json
 import logging
 import re
 
 import requests
 from django.conf import settings
+from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -249,6 +251,13 @@ def parse_search_query(
     query: str, categories: list[str], brands: list[str], available_tags: list[str] | None = None
 ) -> dict:
     """Turn conversational, problem-oriented queries into high-precision catalog filters."""
+    # Check cache first for instant sub-5ms response on repeated queries
+    norm_query = " ".join(query.strip().lower().split())
+    cache_key = f"ai:search:{hashlib.md5(norm_query.encode()).hexdigest()}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return dict(cached)
+
     tags_context = (available_tags or [])[:40]
 
     system = (
@@ -285,13 +294,17 @@ def parse_search_query(
             if not reasoning:
                 parts = [f"{k}: {v}" for k, v in filters.items()]
                 reasoning = f"Understood as {', '.join(parts)}" if parts else "Showing all matching catalog products."
-            return {"filters": filters, "reasoning": reasoning, "source": "llm"}
+            result = {"filters": filters, "reasoning": reasoning, "source": "llm"}
+            cache.set(cache_key, result, timeout=3600)  # Cache for 1 hour
+            return result
     except (LLMError, ValueError, TypeError) as e:
         logger.warning("LLM search failed (%s), using rule-based fallback", e)
 
     fallback_raw, fallback_reasoning = _rule_based_filters(query, categories, brands)
-    return {
+    result = {
         "filters": _sanitize_filters(fallback_raw, categories, brands),
         "reasoning": fallback_reasoning,
         "source": "fallback",
     }
+    cache.set(cache_key, result, timeout=3600)
+    return result
