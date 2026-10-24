@@ -1074,14 +1074,14 @@
     min-height: auto;
     padding: 16px;
     border-radius: 20px;
-    order: 0;
+    order: 1;
   }
   .split-visual img {
     border-radius: 14px;
     max-width: 100%;
   }
   .split-copy {
-    order: 1;
+    order: 0;
   }
   .split-copy h2 {
     font-size: clamp(26px, 6vw, 34px);

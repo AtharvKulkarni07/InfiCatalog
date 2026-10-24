@@ -62,13 +62,23 @@ export default function Navbar() {
             </Link>
             {user ? (
               <>
-                <span className="who">{user.username}</span>
                 <Link className="btn btn-yellow nav-btn" to="/products">
                   My Catalog <span className="arrow">↗</span>
                 </Link>
-                <button className="btn btn-outline nav-btn" onClick={onLogout}>
-                  Sign out
-                </button>
+                <div className="nav-profile-card" title={`Logged in as ${user.username}`}>
+                  <div className="nav-profile-avatar" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+                      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
+                    </svg>
+                  </div>
+                  <div className="nav-profile-info">
+                    <span className="nav-profile-name">{user.username}</span>
+                    <button type="button" className="nav-profile-logout" onClick={onLogout}>
+                      Sign out
+                    </button>
+                  </div>
+                </div>
               </>
             ) : (
               <>
@@ -110,13 +120,27 @@ export default function Navbar() {
             <div className="drawer-head">
               <div className="drawer-user">
                 {user ? (
-                  <>
-                    <div className="drawer-avatar">{user.username.slice(0, 1).toUpperCase()}</div>
-                    <div>
-                      <span className="drawer-name">{user.username}</span>
-                      <span className="drawer-role">Active Member</span>
+                  <div className="nav-profile-card drawer-profile-card">
+                    <div className="nav-profile-avatar drawer-profile-avatar" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+                        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                      </svg>
                     </div>
-                  </>
+                    <div className="nav-profile-info">
+                      <span className="nav-profile-name">{user.username}</span>
+                      <button
+                        type="button"
+                        className="nav-profile-logout"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onLogout();
+                        }}
+                      >
+                        Sign out
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <span className="drawer-guest-badge">Welcome Guest</span>
                 )}

@@ -242,14 +242,7 @@ export default function Home() {
       {/* Product catalog showcase */}
       <section className="section" id="discover">
         <div className="container split">
-          <div className="split-visual reveal">
-            <img
-              src="/assets/home1.png"
-              alt="Illustrated product shelves showing a wide, organised catalog"
-              loading="lazy"
-            />
-          </div>
-          <div className="split-copy reveal delay-1">
+          <div className="split-copy reveal">
             <div className="kicker">BUILT FOR EVERYDAY MOMENTUM</div>
             <h2>Your products, in their right place.</h2>
             <p>
@@ -272,6 +265,13 @@ export default function Home() {
             <Link className="btn btn-yellow" to="/catalog">
               Explore Global Catalog <span className="arrow">↗</span>
             </Link>
+          </div>
+          <div className="split-visual reveal delay-1">
+            <img
+              src="/assets/home1.png"
+              alt="Illustrated product shelves showing a wide, organised catalog"
+              loading="lazy"
+            />
           </div>
         </div>
       </section>

@@ -1,137 +1,101 @@
 # InfiCatalog — AI-Powered Product Management & Search Platform
 
-A full-stack, enterprise-grade product catalog and management platform featuring natural-language AI search, automated product description & tag generation, real-time facet filtering, and Redis caching.
+A full-stack, enterprise-grade product catalog and management platform featuring natural-language AI search, automated product description & tag generation, real-time facet filtering, Redis caching, and UUID-based REST APIs.
 
 Built for the **Infilect Full Stack Development Intern Technical Assignment**.
 
-| Resource | URL |
+| Resource | URL / Details |
 |---|---|
 | **Live Application** | [https://infi-catalog.vercel.app](https://infi-catalog.vercel.app) |
-| **Backend API Health** | [https://inficatalog-api.onrender.com/api/health/](https://inficatalog-api.onrender.com/api/health/) |
-| **Interactive API Documentation (Swagger)** | [https://inficatalog-api.onrender.com/api/docs/](https://inficatalog-api.onrender.com/api/docs/) |
-| **API Documentation (Redoc)** | [https://inficatalog-api.onrender.com/api/redoc/](https://inficatalog-api.onrender.com/api/redoc/) |
+| **Backend API Health Check** | [https://inficatalog-api.onrender.com/api/health/](https://inficatalog-api.onrender.com/api/health/) |
+| **Interactive API Docs (Swagger UI)** | [https://inficatalog-api.onrender.com/api/docs/](https://inficatalog-api.onrender.com/api/docs/) |
+| **Alternative API Docs (Redoc)** | [https://inficatalog-api.onrender.com/api/redoc/](https://inficatalog-api.onrender.com/api/redoc/) |
 | **GitHub Repository** | [https://github.com/AtharvKulkarni07/InfiCatalog](https://github.com/AtharvKulkarni07/InfiCatalog) |
-| **Demo Credentials** | Username: `demo` &nbsp;\|&nbsp; Password: `Demo@12345` |
+| **Demo Account Credentials** | Username: `demo` &nbsp;\|&nbsp; Password: `Demo@12345` |
 
 ---
 
 ## 1. Project Overview
 
-InfiCatalog is a full-stack product catalog platform engineered with a strict separation between **Global Catalog Exploration** (open to visitors and shoppers) and **My Workspace** (authenticated product lifecycle management with ownership-based access control).
+**InfiCatalog** is a modern, responsive web application designed for high-performance catalog management and intuitive discovery. The platform supports two core user modes:
+- **Global Catalog Exploration:** Open to visitors and shoppers with instant keyword search, natural-language AI query translation, category/brand facet filtering, price range scoping, and sorting.
+- **My Workspace (Authenticated Dashboard):** A secure space where registered users create, update, and manage their own product listings with ownership-based access control, AI-assisted description generation, and automated tag suggestions.
 
-### Core Highlights
-- **Product Management:** Complete CRUD workflows for products (Name, Brand, Category, Description, Price, Image URL, Tags) with validation and owner-only editing/deleting permissions.
-- **Authentication & Security:** JWT authentication (Access & Refresh tokens) via SimpleJWT, automated token rotation/refresh on 401, email-based password reset with secure tokens, and rate-limited endpoints.
-- **Smart Search & GenAI:** Translates natural-language shopper requests (e.g., *"healthy zero sugar morning drinks under 250"*) into database queries using Google Gemini, grounded by real catalog facets, with rule-based fallback and Redis caching.
-- **AI Authoring Tools:** One-click AI Product Description Generation and AI Tag Suggestions directly integrated into product creation and editing workflows.
-- **High-Performance Caching:** Redis integration for facet aggregation caching and AI search query caching with automated Django signal-based cache invalidation.
-- **Resilient UI/UX:** Responsive React design system, shareable URL state sync, debounced search, modal confirmations, animated toast notifications, and dedicated loading/empty/error states.
+### Core Capabilities
+- **Product Lifecycle (CRUD):** Create, retrieve, update, and delete products (Name, Brand, Category, Description, Price, Image URL, Tags) using secure UUID identifiers (`/api/products/<uuid>/`).
+- **Unified Smart Search & GenAI:** Translates natural-language intent (e.g., *"healthy zero sugar drinks under 200"*) into grounded SQL database queries using Google Gemini, backed by a deterministic rule-based fallback when offline.
+- **AI Authoring Tools:** One-click marketing description generator and tag recommender integrated directly into product creation forms.
+- **High-Performance Redis Caching:** Sub-millisecond facet aggregation caching and AI query deduplication with automatic Django signal invalidation on database mutations.
+- **Cybersecurity & OWASP Hardening:** JWT authentication (access & refresh tokens), ownership enforcement, input sanitization, image URL protocol & SSRF protection, strict security headers (CSP, HSTS, X-Content-Type-Options), and rate-limiting.
+- **Responsive Widescreen Dashboard:** Adaptive layout engineered for mobile phones, tablets, laptops, and ultra-wide desktop monitors with zero wasted gutter space.
+
+### System Architecture Flow
+```
+[ User Browser / Client (Mobile & Desktop) ]
+                   │
+                   ▼ (HTTPS)
+      [ Vercel Edge CDN (React 18 SPA) ]
+                   │
+                   ▼ (REST APIs via Axios)
+  [ Render Web Service (Gunicorn + WhiteNoise + Django DRF) ]
+        │                   │                         │
+        ▼                   ▼                         ▼
+[ Supabase PostgreSQL ] [ Upstash Redis Cache ] [ Google Gemini 3.5 LLM ]
+- Products Table (UUID) - Facets Cache (30m)    - Query Parser
+- Auth & Users          - AI Query Cache (1h)   - Description Generator
+- B-Tree Indexes        - Signal Invalidation   - Tag Suggester
+```
 
 ---
 
 ## 2. Technology Stack
 
-| Layer | Technologies & Tools | Rationale |
+| Component | Technology | Rationale |
 |---|---|---|
-| **Backend Framework** | Python 3.12, Django 5.2, Django REST Framework (DRF) | Robust REST architecture, ORM, authentication, and validation |
-| **Authentication** | `djangorestframework-simplejwt` | Stateless JWT access/refresh token lifecycle |
-| **Database** | PostgreSQL on **Supabase** (Transaction pooler) | Relational integrity, B-Tree indexed search fields, scalable hosting |
-| **Caching Layer** | **Redis** (Upstash Redis in cloud / Redis 7 Alpine in Docker) via `django-redis` | Sub-millisecond facet reads and AI query deduplication with non-blocking fallback |
-| **GenAI / LLM** | Google Gemini (`gemini-3.5-flash-lite` / REST API) | Cost-effective, low-latency natural language understanding |
+| **Backend Framework** | Python 3.12, Django 5.2, Django REST Framework (DRF) | Robust REST architecture, ORM query optimization, and request validation |
+| **Database** | PostgreSQL on **Supabase** (Transaction pooler) | Relational ACID integrity, B-Tree indexed search fields, scalable hosting |
+| **Caching Layer** | **Redis** (Upstash Redis in Cloud / Redis 7 Alpine in Docker) via `django-redis` | In-memory facet aggregation and query deduplication with graceful fallback |
+| **GenAI / LLM** | Google Gemini (`gemini-3.5-flash-lite` via REST API) | Low-latency, cost-effective natural language extraction and grounding |
+| **Authentication** | `djangorestframework-simplejwt` | Stateless JWT access/refresh token lifecycle with auto-refresh on 401 |
 | **API Documentation** | `drf-spectacular` (OpenAPI 3.0 / Swagger UI / Redoc) | Auto-generated, interactive schema documentation |
-| **Frontend** | React 18, Vite, React Router 6, Axios | High-performance SPA with client-side routing and interceptors |
-| **Styling** | Vanilla CSS Design System (Custom variables, responsive grid) | Zero runtime overhead, tailored theme, responsive down to mobile |
-| **Deployment** | **Vercel** (Frontend) + **Render** (Backend Docker Web Service) | Global CDN edge caching for UI, containerized production backend |
-| **CI / Containerization**| Docker, Docker Compose, GitHub Actions | Reproducible multi-service local environment and automated CI |
+| **Frontend Framework** | React 18, Vite, React Router 6, Axios | High-performance SPA with client-side routing, request interceptors, and caching |
+| **Styling** | Vanilla CSS Design System | Zero runtime overhead, bespoke dark/navy design system, fluid responsiveness |
+| **Deployment & Hosting**| **Vercel** (Frontend) + **Render** (Backend Docker Container) | Global CDN edge caching for UI, containerized production backend with health checks |
+| **CI & Containers** | Docker, Docker Compose, GitHub Actions | Reproducible multi-service local environment and continuous testing |
 
 ---
 
-## 3. System Architecture & Flow
+## 3. Local Setup Instructions
 
-```
-[ User Browser / Client ]
-           │
-           ▼
-[ Vercel Edge CDN (React 18 SPA) ]
-           │ (HTTPS / REST)
-           ▼
-[ Render Web Service (Gunicorn / WhiteNoise / Django DRF) ]
-     │                 │                              │
-     ▼                 ▼                              ▼
-[ Supabase PostgreSQL ] [ Upstash Redis Cache ]   [ Google Gemini LLM API ]
-- Products Table        - Facets Cache (30m TTL)  - Smart Search Parser
-- Auth & Users          - AI Query Cache (1h TTL) - Description Generator
-- B-Tree Indexes        - Invalidation Signals    - Tag Suggester
-```
+You can run InfiCatalog locally using either **Docker Compose** (recommended) or **Manual Setup**.
 
----
-
-## 4. GenAI Implementation & Architecture
-
-InfiCatalog implements three distinct GenAI capabilities with an emphasis on **domain grounding, reliability, and security**:
-
-### A. Natural-Language Smart Search (Primary Feature)
-Instead of allowing the LLM to search or hallucinate products directly, **the LLM acts strictly as a query translator**:
-1. **Catalog Grounding:** The backend queries the current distinct `categories` and `brands` from the database (or Redis cache) and injects them into the system prompt.
-2. **Structured Extraction:** Gemini translates ambiguous user prompts (e.g., *"cheap chips under 100 without sugar"*) into a strict JSON payload:
-   - `search`: Cleaned search term (`"chips"`)
-   - `category`: Grounded category (`"Snacks"`)
-   - `brand`: Grounded brand (if mentioned)
-   - `min_price` / `max_price`: Numerical price bounds (`max_price: 100`)
-   - `ordering`: Price sorting (`"price"` or `"-price"`)
-   - `exclude`: Exclusion keywords (`"sugar"`)
-3. **Strict Output Sanitization:** All LLM outputs pass through `_sanitize_filters`:
-   - Categories and brands are validated against real catalog data; hallucinations are dropped.
-   - Prices are validated as non-negative floats with `min <= max`.
-   - Ordering keys are restricted to a whitelist.
-4. **Redis Query Caching:** MD5 hashes of user queries are cached for 1 hour, giving instant sub-5ms responses for repeated queries.
-5. **Deterministic Rule-Based Fallback:** If the Gemini API key is unset, rate-limited, or times out, a regex-based fallback parser extracts prices ("under/over X"), matching brands, and sorting keywords. The application never breaks.
-6. **Zero-Result Price Relaxation:** If a user specifies an overly restrictive price (e.g., "coffee under 50" where lowest is ₹90), the system automatically relaxes the price bound and returns category matches with an explanatory notice.
-
-### B. AI Product Description Generator (`POST /api/ai/generate-description/`)
-- Generates compelling 2-3 sentence marketing copy given a product's name, brand, and category.
-- Form pre-fills automatically, allowing the user to review and edit before committing.
-
-### C. AI Product Tag Suggestion (`POST /api/ai/suggest-tags/`)
-- Recommends 3-5 normalized lowercase search tags for discoverability (e.g., `organic`, `gluten-free`, `crunchy`).
-
----
-
-## 5. Redis Caching & Invalidation Flow
-
-- **Facet Caching:** Distinct categories and brands are aggregated and cached under `catalog:facets:<scope>:<category>` with a 30-minute TTL.
-- **Automated Cache Invalidation:** Django signals (`post_save` and `post_delete` on the `Product` model) automatically purge facet cache keys whenever any product is added, updated, or removed.
-- **Fault-Tolerant Resilience:** Configured with `IGNORE_EXCEPTIONS: True`. If Redis is temporarily offline or restarting, requests fall back seamlessly to the database without returning 500 errors.
-
----
-
-## 6. Local Setup Instructions
-
-### Option 1: Docker Compose (Recommended — Zero Setup)
-Prerequisites: Docker & Docker Compose installed.
+### Option A: Docker Compose (Zero Configuration)
+Prerequisites: [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running.
 
 ```bash
-# 1. Clone repository
+# 1. Clone the repository
 git clone https://github.com/AtharvKulkarni07/InfiCatalog.git
 cd InfiCatalog
 
-# 2. Start all services (Backend, Frontend, Postgres, Redis)
+# 2. Build and launch all services (Backend, Frontend, PostgreSQL, Redis)
 docker compose up --build
 ```
-- Frontend: `http://localhost:5173`
-- Backend API & Swagger: `http://localhost:8000/api/docs/`
-- Demo account and 16 products are seeded automatically on first boot.
+
+- **Frontend Application:** `http://localhost:5173`
+- **Backend API & Swagger:** `http://localhost:8000/api/docs/`
+- **Pre-seeded Data:** A demo account (`demo` / `Demo@12345`) and 16 catalog items are automatically seeded on startup.
 
 ---
 
-### Option 2: Manual Local Setup
+### Option B: Manual Local Setup
 
-#### Backend Setup
+#### 1. Backend Setup
 ```bash
 cd backend
 
-# Create virtual environment
+# Create and activate virtual environment
 python -m venv .venv
+
 # On Windows:
 .venv\Scripts\activate
 # On Linux/macOS:
@@ -140,91 +104,95 @@ source .venv/bin/activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Run migrations
+# Run database migrations
 python manage.py migrate
 
-# Seed demo products and demo user
+# Seed initial catalog products and demo account
 python manage.py seed_products
 
-# Run test suite
+# Run backend unit and security tests (14 tests)
 python manage.py test products.tests
 
-# Start development server
-python manage.py runserver
+# Start the Django development server
+python manage.py runserver 8000
 ```
 
-#### Frontend Setup
+#### 2. Frontend Setup
 ```bash
 cd frontend
 
-# Install dependencies
+# Install npm dependencies
 npm install
 
-# Start Vite dev server
+# Start Vite development server
 npm run dev
 ```
+The client will be running at `http://localhost:5173`.
 
 ---
 
-## 7. Environment Variables Configuration
+## 4. Environment Variables / Configuration
 
-### Backend (`backend/.env`)
+### Backend Configuration (`backend/.env`)
+Copy `backend/.env.example` to `backend/.env` and configure the following variables:
+
+| Variable | Required | Description | Default / Example |
+|---|---|---|---|
+| `DJANGO_SECRET_KEY` | Yes | Django secret cryptographic key | `your-secure-random-secret-key` |
+| `DJANGO_DEBUG` | No | Enables debug mode (set `False` in production) | `False` |
+| `DATABASE_URL` | Yes | PostgreSQL connection URI | `postgresql://user:pass@host:5432/dbname` |
+| `DB_SSL_REQUIRE` | No | Enforces SSL connection to PostgreSQL | `True` |
+| `REDIS_URL` | No | Redis connection URI (supports `redis://` and `rediss://` for TLS) | `rediss://default:token@host.upstash.io:6379` |
+| `GEMINI_API_KEY` | No | Google AI Studio Gemini API Key | `AIzaSy...` (falls back to rule engine if omitted) |
+| `GEMINI_MODEL` | No | Gemini model designation | `gemini-3.5-flash-lite` |
+| `CORS_ALLOWED_ORIGINS`| Yes | Comma-separated list of allowed frontend origins | `https://infi-catalog.vercel.app,http://localhost:5173` |
+| `ALLOWED_HOSTS` | Yes | Comma-separated list of allowed backend hostnames | `localhost,127.0.0.1,.onrender.com` |
+| `SEED_DEMO_DATA` | No | Automatically seeds demo catalog and user on boot | `true` |
+
+### Frontend Configuration (`frontend/.env`)
+Create `frontend/.env` (or configure via Vercel dashboard):
 
 | Variable | Required | Description | Example |
 |---|---|---|---|
-| `DJANGO_SECRET_KEY` | Yes | Django cryptographic key | `your-secure-secret-key` |
-| `DJANGO_DEBUG` | No | Debug mode (False in production) | `False` |
-| `DATABASE_URL` | Yes | PostgreSQL connection string | `postgresql://user:pass@host:5432/db` |
-| `DB_SSL_REQUIRE` | No | Require SSL for database connection | `True` |
-| `REDIS_URL` | No | Redis connection URL (with TLS support) | `rediss://default:pass@host:6379` |
-| `GEMINI_API_KEY` | No | Google Gemini API key | `AIzaSy...` |
-| `GEMINI_MODEL` | No | Gemini model name | `gemini-3.5-flash-lite` |
-| `CORS_ALLOWED_ORIGINS`| Yes | Allowed frontend origins | `https://infi-catalog.vercel.app` |
-| `EMAIL_HOST_USER` | No | SMTP email for password reset | `your-email@gmail.com` |
-| `EMAIL_HOST_PASSWORD` | No | SMTP app password | `your-app-password` |
-
-### Frontend (`frontend/.env`)
-
-| Variable | Required | Description | Example |
-|---|---|---|---|
-| `VITE_API_URL` | Yes | Backend API base URL | `https://inficatalog-api.onrender.com/api` |
+| `VITE_API_URL` | Yes | Base URL pointing to the Django REST API | `https://inficatalog-api.onrender.com/api` (Production)<br>`http://localhost:8000/api` (Local) |
 
 ---
 
-## 8. API Endpoints Summary
+## 5. Deployment Details
 
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `POST` | `/api/auth/register/` | Register new account & obtain JWT tokens | No |
-| `POST` | `/api/auth/login/` | Sign in & obtain JWT tokens | No |
-| `POST` | `/api/auth/refresh/` | Refresh expired access token | No |
-| `GET` | `/api/auth/me/` | Fetch authenticated user profile | Yes |
-| `POST` | `/api/auth/password-reset/` | Request password reset email | No |
-| `POST` | `/api/auth/password-reset-confirm/` | Reset password using UID & token | No |
-| `GET` | `/api/products/` | Filter, search, sort, and paginate catalog | No |
-| `POST` | `/api/products/` | Create new product | Yes |
-| `GET` | `/api/products/{id}/` | Retrieve product details | No |
-| `PUT / PATCH`| `/api/products/{id}/` | Update product (owner only) | Yes |
-| `DELETE` | `/api/products/{id}/` | Delete product (owner only) | Yes |
-| `GET` | `/api/products/facets/` | Cached categories, brands, & price stats | No |
-| `POST` | `/api/ai/search/` | Natural-language query translation | No |
-| `POST` | `/api/ai/generate-description/`| AI product description generator | Yes |
-| `POST` | `/api/ai/suggest-tags/` | AI product tag suggestion | Yes |
-| `GET` | `/api/health/` | Service health check | No |
-| `GET` | `/api/docs/` | Interactive Swagger UI documentation | No |
-| `GET` | `/api/redoc/` | Redoc API documentation | No |
+InfiCatalog is deployed in a decoupled, production-grade cloud topology:
+
+### Frontend: Vercel (Edge CDN)
+- **Production URL:** [https://infi-catalog.vercel.app](https://infi-catalog.vercel.app)
+- **Build System:** Vite SPA build (`dist/` directory) with custom SPA rewrite routing in `vercel.json` (`/* -> /index.html`).
+- **Client Resilience:** 60-second Axios timeout with automatic transient cold-start retries (mitigating Render free-tier spin-up delays). In-memory facet caching (`getCachedFacets()`) eliminates redundant network round-trips during navigation.
+
+### Backend: Render (Docker Web Service)
+- **Production URL:** [https://inficatalog-api.onrender.com](https://inficatalog-api.onrender.com)
+- **Container Runtime:** Python 3.12-slim Dockerfile with Gunicorn WSGI server and WhiteNoise static file compression.
+- **Port Binding:** Dynamically binds to both `$PORT` (Render's default 10000) and port 8000 via `start.sh`.
+- **Multithreading Concurrency:** Gunicorn runs with `--workers 2 --threads 4 --worker-class gthread` to handle asynchronous database and Redis I/O without blocking worker processes.
+- **Health Check Endpoint:** `GET /api/health/` returns HTTP 200 with service status, database connectivity, and timestamp.
+
+### Database & Caching: Supabase & Upstash
+- **Database:** Hosted PostgreSQL on Supabase using pooled connections with TLS encryption.
+- **Cache:** Upstash Serverless Redis over TLS (`rediss://`), providing sub-5ms caching for facet queries and AI translations.
 
 ---
 
-## 9. Key Design Decisions
+## 6. Key Design Decisions
 
-1. **Dual Catalog UX (Visitor vs Workspace):**
-   Visitors can explore the global community catalog without registration. Authenticated users access a dedicated workspace for managing their personal listings.
-2. **Grounded LLM Translations over Direct Search:**
-   By feeding distinct database facets into Gemini, the LLM maps natural queries directly to indexed SQL filters (`brand`, `category`, `price`, `tags`), completely eliminating hallucinated catalog items.
-3. **Resilient Fallback Chains:**
-   Every cloud dependency (Gemini LLM, Redis Cache, Supabase) has an automatic in-memory or rule-based fallback. The platform never crashes or blocks users when an external service is unavailable.
-4. **URL as Source of Truth:**
-   All search queries, filters, sorting options, and pagination states sync directly to URL search parameters, ensuring full browser history navigation and shareable links.
-5. **Standardized Error Envelope:**
-   Every API failure is formatted consistently (`{"error": {"code": "...", "message": "...", "details": {...}}}`), providing clear feedback across all forms and API consumers.
+1. **UUID Resource Identifiers in Public APIs:**
+   Products use standard `UUIDv4` identifiers in public URLs and REST endpoints (`/api/products/<uuid>/`). This prevents integer enumeration attacks (IDOR), hides business volume, and ensures tamper-resistant object identification.
+2. **Grounded GenAI Query Translation with Deterministic Fallback:**
+   Rather than allowing the LLM to hallucinate catalog products directly, Gemini functions strictly as a query translator. It extracts structured filters (`category`, `brand`, `min_price`, `max_price`, `exclude`, `search`) against real, distinct catalog facets. If Gemini is unavailable or rate-limited, an instant rule-based fallback extracts keywords and price thresholds deterministically.
+3. **Redis Caching with Automated Signal Invalidation:**
+   Expensive category and brand aggregations are cached with a 30-minute TTL. Django model signals (`post_save` and `post_delete` on `Product`) automatically purge cache keys whenever items are created, modified, or deleted, ensuring 100% data consistency. Redis failures are non-blocking (`IGNORE_EXCEPTIONS: True`).
+4. **Optimized Database Queries (No Duplicate `.exists()` Calls):**
+   In `ProductViewSet.list()`, redundant pre-pagination `.exists()` queries were eliminated. Query pagination evaluates counts in a single round-trip, cutting ~50–100ms off catalog load times.
+5. **Unified Responsive Dashboard with Adaptive Widescreen Layout:**
+   Rather than locking the desktop interface into a narrow 1180px box, the dashboard expands smoothly to `min(1560px, calc(100% - 64px))`. The product grid dynamically fills large displays with 4–5 cards per row, while collapsing cleanly to a streamlined 2-column and 1-column layout on tablets and mobile devices.
+6. **Robust Cybersecurity Hardening:**
+   - Strict HTTP security headers: `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Strict-Transport-Security`.
+   - Image URL validation prevents private IP address SSRF (blocking loopback, link-local, and RFC 1918 subnets).
+   - Owner-only write permissions enforced at both the ORM level and DRF permission layer.
