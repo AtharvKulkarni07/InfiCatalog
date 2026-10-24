@@ -210,7 +210,6 @@ export default function Products() {
         <div>
           <div className="kicker">MY WORKSPACE</div>
           <h1>My Catalog</h1>
-          <p className="sub">Your personal product catalog — add, edit, and organise your listings.</p>
         </div>
         <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
           <Link className="btn btn-outline" to="/catalog">

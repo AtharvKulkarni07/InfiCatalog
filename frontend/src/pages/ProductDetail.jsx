@@ -46,7 +46,7 @@ export default function ProductDetail() {
       <div className="state">
         <h2>Product not found</h2>
         <p>It may have been deleted by its owner.</p>
-        <Link className="btn btn-primary" to="/products">Back to catalog</Link>
+        <button type="button" className="btn btn-primary" onClick={() => navigate("/catalog")}>&lt; Back to catalog</button>
       </div>
     );
   }
@@ -55,7 +55,21 @@ export default function ProductDetail() {
   const p = state.product;
   return (
     <article className="detail">
-      <Link to="/products" className="back">Back to catalog</Link>
+      <button
+        type="button"
+        className="back-btn"
+        onClick={() => {
+          if (window.history.state && window.history.state.idx > 0) {
+            navigate(-1);
+          } else {
+            navigate("/catalog");
+          }
+        }}
+        aria-label="Back"
+      >
+        <span className="back-chevron">&lt;</span>
+        <span>Back</span>
+      </button>
       <div className="detail-grid">
         <div className="detail-img"><ProductImage src={p.image_url} alt={p.name} /></div>
         <div>

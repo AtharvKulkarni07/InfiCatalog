@@ -195,7 +195,7 @@ export default function Catalog() {
         <div>
           <div className="kicker">GLOBAL PRODUCT CATALOG</div>
           <h1>Explore Global Catalog</h1>
-          <p className="sub">Browse all products from our community — no account needed.</p>
+          <p className="sub">Browse all products from our community.</p>
         </div>
         <Link className="btn btn-yellow" to="/register">
           Add your products ↗
