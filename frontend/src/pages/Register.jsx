@@ -8,10 +8,11 @@ export default function Register() {
   const { user, ready, register } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
-  const [form, setForm] = useState({ username: "", email: "", password: "" });
+  const [form, setForm] = useState({ username: "", email: "", password: "", confirmPassword: "" });
   const [error, setError] = useState({ message: "", fields: {} });
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   if (ready && user) return <Navigate to="/products" replace />;
 
@@ -24,9 +25,18 @@ export default function Register() {
       setError({ message: "", fields: { password: ["Use at least 8 characters."] } });
       return;
     }
+    if (form.password !== form.confirmPassword) {
+      setError({ message: "", fields: { confirmPassword: ["Passwords do not match."] } });
+      return;
+    }
     setBusy(true);
     try {
-      await register({ username: form.username.trim(), email: form.email.trim(), password: form.password });
+      await register({
+        username: form.username.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        confirm_password: form.confirmPassword,
+      });
       toast("Account created. You're signed in.");
       navigate("/products", { replace: true });
     } catch (err) {
@@ -58,6 +68,7 @@ export default function Register() {
               value={form.password}
               onChange={set("password")}
               autoComplete="new-password"
+              placeholder="Create a password"
               required
               aria-invalid={Boolean(firstError(error.fields, "password"))}
             />
@@ -82,8 +93,44 @@ export default function Register() {
           </div>
           {firstError(error.fields, "password") && <span className="err">{firstError(error.fields, "password")}</span>}
         </label>
+
+        <label>Re-enter password
+          <div className="password-wrap">
+            <input
+              type={showConfirmPassword ? "text" : "password"}
+              value={form.confirmPassword}
+              onChange={set("confirmPassword")}
+              autoComplete="new-password"
+              placeholder="Re-enter your password"
+              required
+              aria-invalid={Boolean(firstError(error.fields, "confirmPassword") || firstError(error.fields, "confirm_password"))}
+            />
+            <button
+              type="button"
+              className="eye-btn"
+              aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+              onClick={() => setShowConfirmPassword((v) => !v)}
+            >
+              {showConfirmPassword ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                  <line x1="1" y1="1" x2="23" y2="23" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              )}
+            </button>
+          </div>
+          {(firstError(error.fields, "confirmPassword") || firstError(error.fields, "confirm_password")) && (
+            <span className="err">{firstError(error.fields, "confirmPassword") || firstError(error.fields, "confirm_password")}</span>
+          )}
+        </label>
+
         <span className="hint">At least 8 characters, not too common.</span>
-        <button className="btn btn-yellow block" disabled={busy}>{busy ? "Creating account…" : <>Create account <span className="arrow">↗</span></>}</button>
+        <button className="btn btn-yellow block" disabled={busy}>{busy ? "Creating account…" : "Create account"}</button>
       </form>
       <p className="alt">Already registered? <Link to="/login">Sign in</Link></p>
     </div>

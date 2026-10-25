@@ -16,11 +16,14 @@ class UserSerializer(serializers.ModelSerializer):
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, style={"input_type": "password"})
+    confirm_password = serializers.CharField(
+        write_only=True, required=False, style={"input_type": "password"}
+    )
     email = serializers.EmailField(required=True)
 
     class Meta:
         model = User
-        fields = ["username", "email", "password"]
+        fields = ["username", "email", "password", "confirm_password"]
 
     def validate_email(self, value):
         if User.objects.filter(email__iexact=value).exists():
@@ -28,6 +31,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value.lower()
 
     def validate(self, attrs):
+        confirm = attrs.get("confirm_password")
+        if confirm and confirm != attrs.get("password"):
+            raise serializers.ValidationError({"confirm_password": ["Passwords do not match."]})
+
         probe = User(username=attrs.get("username"), email=attrs.get("email"))
         try:
             validate_password(attrs["password"], user=probe)
@@ -36,6 +43,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        validated_data.pop("confirm_password", None)
         return User.objects.create_user(**validated_data)
 
     def to_representation(self, instance):
