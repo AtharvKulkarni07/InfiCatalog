@@ -274,7 +274,7 @@ export default function ProductForm() {
 
         <div className="row end">
           <Link className="btn btn-outline" to={editing ? `/products/${id}` : "/products"}>Cancel</Link>
-          <button className="btn btn-yellow" disabled={saving}>{saving ? "Saving…" : editing ? "Save changes ↗" : "Add product ↗"}</button>
+          <button className="btn btn-yellow" disabled={saving}>{saving ? "Saving…" : editing ? "Save changes" : "+ Add product"}</button>
         </div>
       </form>
     </div>

@@ -289,13 +289,20 @@ InfiCatalog is deployed across a decoupled, multi-cloud production architecture:
                   └──────────────┘ └──────────────┘ └──────────────┘
 ```
 
-### Production Resilience & Cold Start Handling
+### Production Resilience & Cold Start Handling (Self-Owned Solution)
 
-Render free-tier web services spin down after periods of inactivity, requiring ~30–50 seconds to complete a cold-boot. InfiCatalog implements multi-tier mitigation:
-1. **Axios Timeout Extension:** Increased frontend timeout from 20s to **60s** (`timeout: 60000`) in `api.js` to prevent premature client abortions (`ECONNABORTED`).
-2. **Automatic Transient Retries:** Integrated an interceptor in `api.js` that catches 502/503 errors or cold-start timeouts and automatically retries `GET` requests after a 2-second delay.
-3. **In-Memory Client Caching:** Category and brand facets are cached in memory (`getCachedFacets()`), allowing instant route transitions (0ms network round-trip) once loaded.
-4. **Gunicorn Multithreading:** Configured Gunicorn with `--threads 4 --worker-class gthread` in `backend/start.sh`, allowing each worker process to handle concurrent I/O asynchronously without blocking on database queries.
+Render free-tier web services spin down after 15 minutes of inactivity, requiring ~30–50 seconds to complete a cold-boot. Instead of relying on external third-party monitoring platforms, InfiCatalog implements a **100% self-owned, multi-tier provision**:
+
+1. **GitHub Actions Scheduled Keep-Alive (`.github/workflows/keep_alive.yml`):**
+   A native repository workflow scheduled via cron (`*/14 * * * *`) that pings the Render `/api/health/` endpoint every 14 minutes. This prevents the container from ever reaching the 15-minute inactivity threshold, keeping it continuously warm 24/7.
+2. **Frontend In-App Instant Pre-Warm & Heartbeat (`api.js`):**
+   The moment any user visits `https://infi-catalog.vercel.app`, `api.js` immediately dispatches an asynchronous background ping to `/api/health/` before the user even navigates or searches. While the browser tab remains open, a lightweight 8-minute heartbeat maintains active container status.
+3. **Standalone Self-Hosted Python Worker (`scripts/keep_alive.py`):**
+   A self-contained worker utility included directly in the codebase that can be executed on any server or machine (`python scripts/keep_alive.py [URL] [INTERVAL]`).
+4. **Axios 60-Second Timeout & Auto-Retry:**
+   Frontend Axios client configured with a `60000ms` timeout and an automatic 2-second retry interceptor for transient 502/503 cold boots on `GET` requests.
+5. **Gunicorn Multithreading:**
+   Gunicorn runs with `--workers 2 --threads 4 --worker-class gthread` in `backend/start.sh`, allowing concurrent I/O without blocking worker processes.
 
 ---
 

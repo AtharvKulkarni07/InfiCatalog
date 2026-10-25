@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, formatPrice, getCachedFacets, parseError } from "../api.js";
-import { Sparkle } from "../components/Icons.jsx";
+import { FilterIcon, Sparkle } from "../components/Icons.jsx";
 import Pagination from "../components/Pagination.jsx";
 import ProductCard from "../components/ProductCard.jsx";
 import { Empty, ErrorBox, SkeletonGrid } from "../components/States.jsx";
@@ -194,7 +194,7 @@ export default function Catalog() {
           <p className="sub">Browse all products from our community.</p>
         </div>
         <Link className="btn btn-yellow" to="/register">
-          Add your products ↗
+          + Add your products
         </Link>
       </section>
 
@@ -212,8 +212,19 @@ export default function Catalog() {
           aria-label="Search products"
           placeholder='Search by keyword or prompt (e.g. "chips", "healthy drinks under 200", "sugar-free")...'
         />
+        {(q || hasFilters || aiNote) && (
+          <button
+            type="button"
+            className="search-clear-btn"
+            onClick={clearAll}
+            title="Clear search and show all catalog"
+            aria-label="Clear search and show all catalog"
+          >
+            ✕
+          </button>
+        )}
         <button type="submit" className="btn btn-yellow" disabled={aiBusy || !q.trim()}>
-          {aiBusy ? "Searching…" : <>Search <span className="arrow">↗</span></>}
+          {aiBusy ? "Searching…" : "Search"}
         </button>
       </form>
 
@@ -236,11 +247,16 @@ export default function Catalog() {
         <div className="ainote" role="status">
           <div className="ainote-header">
             <span className="ai-label">
-              <Sparkle size={15} /> AI Search Intent
+              <Sparkle size={15} /> Applied Filters
             </span>
-            <span className="src">
-              {aiNote.source === "llm" ? "✦ Gemini 3.5" : "✦ Rule Engine"}
-            </span>
+            <button
+              type="button"
+              className="ainote-clear-btn"
+              onClick={clearAll}
+              title="Clear search and show all catalog"
+            >
+              ✕ Clear search & show all
+            </button>
           </div>
 
           {aiNote.reasoning && (
@@ -271,8 +287,14 @@ export default function Catalog() {
         </div>
       )}
 
-      <button className="btn btn-outline filters-toggle" onClick={() => setFiltersOpen((o) => !o)} aria-expanded={filtersOpen}>
-        {filtersOpen ? "Hide filters" : "Show filters"}
+      <button
+        className={`btn btn-outline filters-toggle ${filtersOpen ? "is-active" : ""}`}
+        onClick={() => setFiltersOpen((o) => !o)}
+        aria-expanded={filtersOpen}
+        aria-label="Toggle filters"
+      >
+        <FilterIcon size={18} />
+        <span>Filters</span>
       </button>
 
       <div className="layout">

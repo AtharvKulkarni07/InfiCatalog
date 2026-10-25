@@ -12,3 +12,9 @@ export const Mark = () => (
     <rect x="17" y="11" width="9" height="6" rx="2" fill="#fff" />
   </svg>
 );
+
+export const FilterIcon = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+  </svg>
+);

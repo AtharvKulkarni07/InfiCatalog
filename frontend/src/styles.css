@@ -696,8 +696,55 @@ main.main-home {
 
 .filters-toggle {
   display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  padding: 0.65rem 1.25rem;
+  border-radius: 999px;
   margin-top: 1rem;
   width: 100%;
+}
+
+.search-clear-btn {
+  background: transparent;
+  border: 0;
+  color: #64748b;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.18s ease;
+  line-height: 1;
+}
+
+.search-clear-btn:hover {
+  background: #e2e8f0;
+  color: #ef4444;
+}
+
+.ainote-clear-btn {
+  background: var(--white);
+  border: 1px solid #bae6fd;
+  color: #0369a1;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.28rem 0.75rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  margin-left: auto;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.ainote-clear-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fca5a5;
 }
 
 label {

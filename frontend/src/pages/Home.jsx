@@ -144,7 +144,7 @@ export default function Home() {
       <section className="sliding-catalog-section">
         <div className="container">
           <div className="sliding-head">
-            <div>
+            <div className="sliding-head-content">
               <div className="kicker">CURATED COLLECTION</div>
               <h2>Trending in the Catalog</h2>
             </div>

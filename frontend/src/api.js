@@ -105,3 +105,16 @@ export const firstError = (fields, name) => {
 
 const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0, maximumFractionDigits: 2 });
 export const formatPrice = (value) => inr.format(Number(value));
+
+// Background Pre-warm & Keep-Alive Loop:
+// Sends an immediate background ping to /api/health/ on page load to wake Render if cold,
+// and maintains a heartbeat every 8 minutes while the user has the application open.
+export function initKeepAlive() {
+  if (typeof window === "undefined") return;
+  api.get("/health/").catch(() => {});
+  setInterval(() => {
+    api.get("/health/").catch(() => {});
+  }, 8 * 60 * 1000);
+}
+initKeepAlive();
+
