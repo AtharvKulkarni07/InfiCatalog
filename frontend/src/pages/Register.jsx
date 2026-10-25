@@ -56,7 +56,6 @@ export default function Register() {
   return (
     <div className="auth">
       <h1>Create your account</h1>
-      <p className="sub">It takes a few seconds. No email verification needed.</p>
       {error.message && !Object.keys(error.fields).length && <div className="banner banner-error" role="alert">{error.message}</div>}
       <form onSubmit={submit} className="form" noValidate>
         {field("username", "Username", { autoComplete: "username", autoFocus: true })}
