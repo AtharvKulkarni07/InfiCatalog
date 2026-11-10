@@ -1088,6 +1088,56 @@ legend {
 .skel-line.short { width: 45%; margin-bottom: 1rem; }
 @keyframes shimmer { to { background-position: -200% 0; } }
 
+.skeleton-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+}
+
+.wake-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.35rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-left: 4px solid #16a34a;
+  border-radius: 14px;
+  color: #166534;
+  box-shadow: 0 4px 14px rgba(22, 163, 74, 0.08);
+  animation: fadeIn 0.3s ease;
+}
+
+.wake-banner strong {
+  display: block;
+  font-size: 0.95rem;
+  color: #14532d;
+  margin-bottom: 0.15rem;
+}
+
+.wake-banner p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #166534;
+  line-height: 1.4;
+}
+
+.wake-spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2.5px solid #bbf7d0;
+  border-top-color: #16a34a;
+  animation: spin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ==========================================================================
    Product Detail View
    ========================================================================== */

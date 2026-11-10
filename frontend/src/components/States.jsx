@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 export const Loading = ({ label = "Loading" }) => (
   <div className="state" role="status">
     <div className="spinner" aria-hidden="true" />
@@ -29,14 +31,34 @@ export const Empty = ({ title, children, icon }) => (
   </div>
 );
 
-export const SkeletonGrid = ({ count = 8 }) => (
-  <div className="grid" aria-busy="true" aria-label="Loading products">
-    {Array.from({ length: count }, (_, i) => (
-      <div className="card skel" key={i}>
-        <div className="skel-img" />
-        <div className="skel-line" />
-        <div className="skel-line short" />
+export const SkeletonGrid = ({ count = 8 }) => {
+  const [waking, setWaking] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setWaking(true), 3500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="skeleton-wrap">
+      {waking && (
+        <div className="wake-banner" role="status">
+          <span className="wake-spinner" aria-hidden="true" />
+          <div>
+            <strong>Connecting to live backend…</strong>
+            <p>Render free tier spins down with inactivity and takes ~30–50s to wake up. Products are loading, thanks for your patience!</p>
+          </div>
+        </div>
+      )}
+      <div className="grid" aria-busy="true" aria-label="Loading products">
+        {Array.from({ length: count }, (_, i) => (
+          <div className="card skel" key={i}>
+            <div className="skel-img" />
+            <div className="skel-line" />
+            <div className="skel-line short" />
+          </div>
+        ))}
       </div>
-    ))}
-  </div>
-);
+    </div>
+  );
+};

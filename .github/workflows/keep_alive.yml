@@ -3,7 +3,7 @@ name: Keep Backend Alive
 on:
   schedule:
     # Render free-tier instances spin down after 15 minutes of inactivity.
-    # Ping every 14 minutes to keep the container continuously warm and responsive.
+    # Ping every 14 minutes to keep the container warm and responsive.
     - cron: '*/14 * * * *'
   workflow_dispatch: # Allows manual trigger from GitHub Actions tab
 
@@ -15,14 +15,17 @@ jobs:
       - name: Send keep-alive health check to Render backend
         run: |
           echo "==> [$(date -u)] Sending keep-alive ping to InfiCatalog backend..."
-          RESPONSE=$(curl -s -S -w "\nHTTP_STATUS:%{http_code}\nTIME_TOTAL:%{time_total}s\n" \
-            --connect-timeout 60 \
-            --max-time 90 \
-            "https://inficatalog-api.onrender.com/api/health/")
-          echo "$RESPONSE"
-          STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
-          if [ "$STATUS" = "200" ]; then
-            echo "==> [SUCCESS] Backend is warm and healthy (HTTP 200)."
-          else
-            echo "==> [NOTICE] Backend responded with status $STATUS (may be waking up)."
-          fi
+          for i in 1 2; do
+            echo "Attempt $i..."
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 45 --max-time 120 "https://inficatalog-api.onrender.com/api/health/" || echo "000")
+            echo "HTTP Status: $HTTP_STATUS"
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "==> [SUCCESS] Backend is warm and healthy (HTTP 200)."
+              exit 0
+            fi
+            echo "Waiting 5 seconds before retry..."
+            sleep 5
+          done
+          echo "==> [NOTICE] Backend ping cycle completed (Status: $HTTP_STATUS). Container is waking up."
+          exit 0
+
